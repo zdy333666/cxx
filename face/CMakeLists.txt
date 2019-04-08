@@ -33,9 +33,9 @@ cmake_minimum_required(VERSION 3.13)
 project(face)
 
 set(CMAKE_CXX_STANDARD 17)
-#SET(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -std=c++17 -pthread -uuid")
 
 
+include_directories("/home/zdy/git-local/annoy/src")
 
 # add Boost dependences
 find_package(Boost REQUIRED COMPONENTS system filesystem)
@@ -57,20 +57,26 @@ link_directories("/usr/local/lib")
 
 
 
-
 add_executable(face main.cpp)
-TARGET_LINK_LIBRARIES(face ${Boost_LIBRARIES} pthread uuid bsoncxx)
+target_link_libraries(face ${Boost_LIBRARIES} -luuid -lbsoncxx -ldlib -lX11 -ljpeg -lpng -lgif -lblas -lcblas -llapack -lpthread)
 
 
 
-add_executable(test_uuid test/test_uuid.cpp)
-TARGET_LINK_LIBRARIES(test_uuid ${Boost_LIBRARIES} -luuid)
-
-add_executable(test_base64 test/test_base64.cpp)
-TARGET_LINK_LIBRARIES(test_base64 ${Boost_LIBRARIES})
-
-add_executable(test_bson_objectId test/test_bson_objectId.cpp)
-TARGET_LINK_LIBRARIES(test_bson_objectId ${Boost_LIBRARIES} bsoncxx)
-
-add_executable(test_bson_document test/test_bson_document.cpp)
-TARGET_LINK_LIBRARIES(test_bson_document ${Boost_LIBRARIES} bsoncxx)
+#add_executable(test_uuid test/test_uuid.cpp)
+#target_link_libraries(test_uuid ${Boost_LIBRARIES} -luuid)
+#
+#add_executable(test_base64 test/test_base64.cpp)
+#target_link_libraries(test_base64 ${Boost_LIBRARIES})
+#
+#add_executable(test_bson_objectId test/test_bson_objectId.cpp)
+#target_link_libraries(test_bson_objectId ${Boost_LIBRARIES} bsoncxx)
+#
+#add_executable(test_bson_document test/test_bson_document.cpp)
+#target_link_libraries(test_bson_document ${Boost_LIBRARIES} bsoncxx)
+#
+#add_executable(test_annoy test/test_annoy.cpp)
+#
+#add_executable(test_annoy_precision test/test_annoy_precision.cpp)
+#
+#add_executable(test_build_face_index test/test_build_face_index.cpp)
+#target_link_libraries(test_build_face_index ${Boost_LIBRARIES} -luuid -lbsoncxx -ldlib -lX11 -ljpeg -lpng -lgif -lblas -lcblas -llapack -lpthread)
