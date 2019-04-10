@@ -43,15 +43,14 @@ using net_type = loss_mmod <con<1, 9, 9, 1, 1, rcon5<rcon5<rcon5<downsampler<
 // was set to 10000, and the training dataset consisted of about 3 million images instead of
 // 55.  Also, the input layer was locked to images of size 150.
 template<template<int, template<typename> class, int, typename> class block, int N,
-        template<typename> class BN, typename SUBNET>
-using residual = add_prev1 <block<N, BN, 1, tag1 < SUBNET>>>;
+        template<typename> class BN, typename SUBNET> using residual = add_prev1 <block<N, BN, 1, tag1 < SUBNET>>>;
 
 template<template<int, template<typename> class, int, typename> class block, int N,
-        template<typename> class BN, typename SUBNET>
-using residual_down = add_prev2 <avg_pool<2, 2, 2, 2, skip1 < tag2 < block<N, BN, 2, tag1 < SUBNET>>>>>>;
+        template<typename> class BN, typename SUBNET> using residual_down = add_prev2 <avg_pool<2, 2, 2, 2,
+        skip1 < tag2 < block<N, BN, 2, tag1 < SUBNET>>>>>>;
 
-template<int N, template<typename> class BN, int stride, typename SUBNET>
-using block  = BN<con < N, 3, 3, 1, 1, relu < BN<con < N, 3, 3, stride, stride, SUBNET>>>>>;
+template<int N, template<typename> class BN, int stride, typename SUBNET> using block  = BN<
+        con < N, 3, 3, 1, 1, relu < BN<con < N, 3, 3, stride, stride, SUBNET>>>>>;
 
 template<int N, typename SUBNET> using ares      = relu<residual<block, N, affine, SUBNET>>;
 template<int N, typename SUBNET> using ares_down = relu<residual_down<block, N, affine, SUBNET>>;
@@ -62,21 +61,107 @@ template<typename SUBNET> using alevel2 = ares<128, ares<128, ares_down<128, SUB
 template<typename SUBNET> using alevel3 = ares<64, ares<64, ares<64, ares_down<64, SUBNET>>>>;
 template<typename SUBNET> using alevel4 = ares<32, ares<32, ares<32, SUBNET>>>;
 
-using anet_type = loss_metric <fc_no_bias<128, avg_pool_everything <
-                                               alevel0<
-                                                       alevel1<
-                                                               alevel2<
-                                                                       alevel3<
-                                                                               alevel4<
-                                                                                       max_pool < 3, 3, 2, 2,
-                                                                                       relu < affine < con <
-                                                                                       32, 7, 7, 2, 2,
-                                                                                       input_rgb_image_sized < 150>
-                                                                       >>>>>>>>>>>>;
+using anet_type = loss_metric <fc_no_bias<128, avg_pool_everything < alevel0<alevel1<alevel2<alevel3<alevel4<
+        max_pool < 3, 3, 2, 2, relu < affine < con < 32, 7, 7, 2, 2, input_rgb_image_sized < 150>
+>>>>>>>>>>>>;
 
 // ----------------------------------------------------------------------------------------
 
+
 namespace face {
+
+    struct UserInfo {
+        std::string group_id;
+        std::string user_id;
+        std::string user_info;
+        double score;
+    };
+
+    struct Location {
+        double left;
+        double top;
+        double width;
+        double height;
+        long rotation;
+    };
+
+    struct Point {
+        double x;
+        double y;
+    };
+
+
+    class FaceInfo {
+
+    private:
+        std::string face_token;
+        double face_probability;
+        std::string label;
+        Location location;
+        std::vector<Point> landmarks;
+        std::vector<double> descriptors;
+
+    public:
+        FaceInfo() {
+
+        };
+
+        ~FaceInfo() {
+
+        }
+
+        void set_face_token(std::string &face_token) {
+            this->face_token = face_token;
+        }
+
+        std::string get_face_token() {
+            return this->face_token;
+        }
+
+        void set_face_probability(double face_probability) {
+            this->face_probability = face_probability;
+        }
+
+        double get_face_probability() {
+            return this->face_probability;
+        }
+
+        void set_label(std::string &label) {
+            this->label = label;
+        }
+
+        std::string get_label() {
+            return this->label;
+        }
+
+        void set_location(Location &location) {
+            this->location = location;
+        }
+
+        Location get_location() {
+            return this->location;
+        }
+
+        void set_landmarks(std::vector<Point> &landmarks) {
+            this->landmarks = landmarks;
+        }
+
+        std::vector<Point> get_landmarks() {
+            return this->landmarks;
+        }
+
+        void set_descriptors(std::vector<double> &descriptors) {
+            this->descriptors = descriptors;
+        }
+
+        std::vector<double> get_descriptors() {
+            return this->descriptors;
+        }
+
+    };
+
+
+    // ----------------------------------------------------------------------------------------
 
     net_type detector;
 
@@ -87,17 +172,11 @@ namespace face {
     anet_type descriptor;
 
 
-    AnnoyIndex<int, double, Euclidean, Kiss32Random> annoy_index = AnnoyIndex<int, double, Euclidean, Kiss32Random>(128);
+    AnnoyIndex<int, double, Euclidean, Kiss32Random> annoy_index = AnnoyIndex<int, double, Euclidean, Kiss32Random>(
+            128);
 
 
-    std::string people_infos[] = {
-            "chendong",
-            "liyongliang",
-            "shenxiaohui",
-            "wangrongfa",
-            "wangshanlin",
-            "yanpeizong"
-    };
+    std::string people_infos[] = {"chendong", "liyongliang", "shenxiaohui", "wangrongfa", "wangshanlin", "yanpeizong"};
 
     /**
      *
@@ -116,7 +195,7 @@ namespace face {
         std::cout << "loaded descriptor model file:" << descriptor_model_path << std::endl;
 
 
-        std::string annoy_index_path ="../data/precision.tree";
+        std::string annoy_index_path = "../data/faceset_test.tree";
         annoy_index.load(annoy_index_path.c_str());
         std::cout << "loaded annoy index file:" << annoy_index_path << std::endl;
 
@@ -126,11 +205,11 @@ namespace face {
 
 
     /**
-     *
-     * @param img_str
-     * @return
+     * 
+     * @param img_str 
+     * @return 
      */
-    auto face_detect(std::string img_str) try {
+    dlib::matrix<dlib::rgb_pixel> local_load_image(std::string &img_str) {
 
         long t_start, t_end;
         t_start = utils::timestamp();
@@ -156,110 +235,17 @@ namespace face {
         t_end = utils::timestamp();
         std::cout << "save temp image in " << t_end - t_start << " ms" << std::endl;
 
-
-        t_start = utils::timestamp();
-
-        auto faces = detector(img);
-
-        t_end = utils::timestamp();
-        std::cout << "detect face in " << t_end - t_start << " ms" << std::endl;
-
-
-        json face_list;
-
-        // Run the face detector on the image of our action heroes, and for each face extract a
-        // copy that has been normalized to 150x150 pixels in size and appropriately rotated
-        // and centered.
-
-        for (auto face : faces) {
-
-            double detection_confidence = face.detection_confidence;
-            cout << "face detection_confidence: " << detection_confidence << endl;
-
-            //set face detection confidence threshold
-            if(detection_confidence < 1.0){
-                continue;
-            }
-
-            auto shape = predictor(img, face.rect);
-
-            std::cout << "shape rect:" << shape.get_rect() << std::endl;
-            std::cout << "shape size:" << shape.num_parts() << std::endl;
-
-
-            json landmark_json;
-            for (int idx = 0; idx < shape.num_parts(); idx++) {
-
-                auto point = shape.part(idx);
-
-                json point_json = {
-                        {"x", point.x()},
-                        {"y", point.y()}
-                };
-
-                landmark_json.push_back(point_json);
-            }
-
-            json face_json;
-            face_json["face_token"] = bsoncxx::oid().to_string();
-            face_json["face_probability"] = face.detection_confidence;
-            face_json["location"] = {
-                    {"left",     face.rect.left()},
-                    {"top",      face.rect.top()},
-                    {"width",    face.rect.width()},
-                    {"height",   face.rect.height()},
-                    {"rotation", 0},
-                    {"label",    face.label}
-            };
-            face_json["landmark"] = landmark_json;
-
-            face_list.push_back(face_json);
-        }
-
-
-        json result;
-        result["face_num"] = faces.size();
-        result["face_list"] = face_list;
-
-        return result;
-
-    } catch (std::exception &e) {
-        std::cout << e.what() << std::endl;
+        return img;
     }
 
-
     /**
-     *
-     * @param img_str
-     * @return
+     * 
+     * @param img 
+     * @return 
      */
-    auto face_search(std::string img_str, std::string group_id_list, int max_face_num) try {
+    auto local_get_faces(dlib::matrix<dlib::rgb_pixel> &img) {
 
         long t_start, t_end;
-        t_start = utils::timestamp();
-
-        std::string file_id = bsoncxx::oid().to_string();
-
-        std::string temp_file_path = "../temp/" + file_id + ".jpg";
-
-        std::ofstream tmp_file;
-        tmp_file.open(temp_file_path);
-
-        if (!tmp_file.is_open()) {
-            std::cout << "can not access temp file:" << temp_file_path << std::endl;
-            exit(1);
-        }
-
-        tmp_file.write(img_str.data(), img_str.size());
-        tmp_file.close();
-
-        dlib::matrix<dlib::rgb_pixel> img;
-        dlib::load_image(img, temp_file_path);
-
-        t_end = utils::timestamp();
-        std::cout << "save temp image in " << t_end - t_start << " ms" << std::endl;
-
-
         t_start = utils::timestamp();
 
         auto faces = detector(img);
@@ -267,105 +253,173 @@ namespace face {
         t_end = utils::timestamp();
         std::cout << "detect face in " << t_end - t_start << " ms" << std::endl;
 
+        return faces;
+    }
 
+    /**
+     * 
+     */
+    std::vector<matrix < float, 0, 1>> local_get_descriptors(std::vector<matrix < rgb_pixel>> &faces) {
 
-        // Run the face detector on the image of our action heroes, and for each face extract a
-        // copy that has been normalized to 150x150 pixels in size and appropriately rotated
-        // and centered.
-        std::vector<matrix < rgb_pixel>>
-        extracted_faces;
-        for (auto face : faces) {
-
-            double detection_confidence = face.detection_confidence;
-            cout << "face detection_confidence: " << detection_confidence << endl;
-
-            //set face detection confidence threshold
-            if(detection_confidence < 1.0){
-                continue;
-            }
-
-            auto shape = predictor(img, face.rect);
-
-            matrix <rgb_pixel> face_chip;
-            extract_image_chip(img, get_face_chip_details(shape, 150, 0.25), face_chip);
-
-            extracted_faces.push_back(move(face_chip));
-        }
-
+        long t_start, t_end;
+        t_start = utils::timestamp();
 
         // This call asks the DNN to convert each face image in faces into a 128D vector.
         // In this 128D vector space, images from the same person will be close to each other
         // but vectors from different people will be far apart.  So we can use these vectors to
         // identify if a pair of images are from the same person or from different people.
 
-        t_start = utils::timestamp();
-
-        std::vector<matrix < float, 0, 1>> face_descriptors = descriptor(extracted_faces);
+        std::vector<matrix < float, 0, 1>> descriptors = descriptor(faces);
 
         t_end = utils::timestamp();
         std::cout << "extract descriptors in " << t_end - t_start << " ms" << std::endl;
 
-
-        json face_list;
-
-        for (int i = 0; i < faces.size(); i++) {
-            auto face = faces[i];
-            auto face_descriptor = face_descriptors[i];
-
-            std::vector<double> vec(face_descriptor.begin(), face_descriptor.end());
+        return descriptors;
+    }
 
 
-            // search face from annoy index tree
-            int result_n = max_face_num;
-            int search_k = -1;
-            std::vector<int> closest;
-            std::vector<double> distances;
+    /**
+     * 
+     * @param descriptor 
+     * @param result_n 
+     * @return 
+     */
+std::vector<int> local_ann_search(double *descriptor, int result_n) {
 
-            annoy_index.get_nns_by_vector(vec.data(), result_n, search_k, &closest, &distances);
+    // search face from annoy index tree
+    int search_k = -1;
+    std::vector<int> closest;
+    std::vector<double> distances;
 
-            json user_list_json;
-            for(int i = 0; i < closest.size(); i++){
-                int id = closest[i];
-                double distance = distances[i];
+    annoy_index.get_nns_by_vector(descriptor, result_n, search_k, &closest, &distances);
 
-                std::cout << "search result -- id:" << id << "  distance:" << distance << std::endl;
+    for (int i = 0; i < closest.size(); i++) {
+        int id = closest[i];
+        double distance = distances[i];
 
-                json user_json;
-                user_json["group_id"] = group_id_list;
-                user_json["user_id"] = people_infos[id];
-                user_json["user_info"] = "userinfo...";
-                user_json["score"] = 0.0;
+        std::cout << "search result -- id:" << id << "  distance:" << distance << std::endl;
+    }
 
-                user_list_json.push_back(user_json);
-            }
-
-            closest.clear();
-            distances.clear();
+    distances.clear();
 
 
-            json face_json;
-            face_json["face_token"] = bsoncxx::oid().to_string();
-            face_json["location"] = {
-                    {"left",     face.rect.left()},
-                    {"top",      face.rect.top()},
-                    {"width",    face.rect.width()},
-                    {"height",   face.rect.height()},
-                    {"rotation", 0},
-                    {"label",    face.label}
-            };
-            face_json["user_list"] = user_list_json;
+    return closest;
+}
 
-            face_list.push_back(face_json);
+
+/**
+ * 
+ * @param descriptor 
+ * @param result_n 
+ * @param group_id 
+ * @return 
+ */
+std::vector<UserInfo> user_search(double *descriptor, int result_n, std::string &group_id) {
+
+    std::vector<int> closest = local_ann_search(descriptor, result_n);
+
+    std::vector<UserInfo> userInfos;
+    for (int i = 0; i < closest.size(); i++) {
+        int id = closest[i];
+
+        UserInfo userInfo;
+        userInfo.group_id = group_id;
+        userInfo.user_id = people_infos[id];
+        userInfo.score = 0.0;
+
+        userInfos.push_back(userInfo);
+    }
+
+    return userInfos;
+}
+
+
+/**
+*
+* @param img_str
+* @return
+*/
+std::vector<FaceInfo> face_detect(std::string img_str, int max_face_num) try {
+
+    dlib::matrix<dlib::rgb_pixel> img = local_load_image(img_str);
+
+    auto faces = local_get_faces(img);
+
+
+    // Run the face detector on the image of our action heroes, and for each face extract a
+    // copy that has been normalized to 150x150 pixels in size and appropriately rotated
+    // and centered.
+    std::vector<matrix<rgb_pixel>> extracted_faces;
+    for (auto face : faces) {
+
+        double detection_confidence = face.detection_confidence;
+        cout << "face detection_confidence: " << detection_confidence << endl;
+
+        //set face detection confidence threshold
+        if (detection_confidence < 1.0) {
+            continue;
         }
 
-        json result;
-        result["face_num"] = faces.size();
-        result["face_list"] = face_list;
+        auto shape = predictor(img, face.rect);
 
-        return result;
+        matrix<rgb_pixel> face_chip;
+        extract_image_chip(img, get_face_chip_details(shape, 150, 0.25), face_chip);
 
-    } catch (std::exception &e) {
-        std::cout << e.what() << std::endl;
+        extracted_faces.push_back(move(face_chip));
     }
+
+
+    std::vector<matrix<float, 0, 1>> face_descriptors = local_get_descriptors(extracted_faces);
+
+
+    std::vector<FaceInfo> faceInfos;
+
+    for (int i = 0; i < faces.size(); i++) {
+
+        auto face = faces[i];
+        auto face_descriptor = face_descriptors[i];
+
+        auto shape = predictor(img, face.rect);
+        std::cout << "shape rect:" << shape.get_rect() << std::endl;
+        std::cout << "shape size:" << shape.num_parts() << std::endl;
+
+        std::string face_token = bsoncxx::oid().to_string();
+        double face_probability = face.detection_confidence;
+        Location location;
+        std::vector<Point> landmarks;
+        std::vector<double> descriptors(face_descriptor.begin(), face_descriptor.end());
+
+        location.left = face.rect.left();
+        location.top = face.rect.top();
+        location.width = face.rect.width();
+        location.height = face.rect.height();
+        location.rotation = 0;
+
+        for (int idx = 0; idx < shape.num_parts(); idx++) {
+            auto part = shape.part(idx);
+
+            Point point;
+            point.x = part.x();
+            point.y = part.y();
+
+            landmarks.push_back(point);
+        }
+
+        face::FaceInfo faceInfo;
+        faceInfo.set_face_token(face_token);
+        faceInfo.set_face_probability(face_probability);
+        faceInfo.set_location(location);
+        faceInfo.set_landmarks(landmarks);
+        faceInfo.set_descriptors(descriptors);
+
+        faceInfos.push_back(faceInfo);
+    }
+
+    return faceInfos;
+
+} catch (std::exception &e) {
+    std::cout << e.what() << std::endl;
+}
+
 
 }

@@ -240,12 +240,12 @@ int main() try {
     std::cout << "Builded index in " << t_end - t_start << " ms" << std::endl;
 
 
-    std::cout << "Saving index ..." << std::endl;
-    annoy_index.save("../data/precision.tree");
-
-
     std::cout << "get_n_items: " << annoy_index.get_n_items() << std::endl;
     std::cout << "get_n_trees: " << annoy_index.get_n_trees() << std::endl;
+
+    std::cout << "Saving index ..." << std::endl;
+    annoy_index.save("../data/faceset_test.tree");
+
 
     return 0;
 

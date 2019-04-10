@@ -35,6 +35,7 @@ project(face)
 set(CMAKE_CXX_STANDARD 17)
 
 
+
 include_directories("/home/zdy/git-local/annoy/src")
 
 # add Boost dependences
@@ -47,19 +48,29 @@ link_directories(face ${Boost_LIBRARY_DIRS})
 # add cinatra dependences
 include_directories("/usr/local/include/cinatra/cinatra")
 
-# add cinatra dependences
+# add mongo dependences
+#include_directories("/usr/local/include/libbson-1.0")
+#include_directories("/usr/local/include/libmongoc-1.0")
 include_directories("/usr/local/include/bsoncxx/v_noabi")
-#include_directories("/usr/local/include/mongocxx/v_noabi")
+include_directories("/usr/local/include/mongocxx/v_noabi")
+
+
+include_directories("/usr/include/hdf5/serial")
 
 # add other dependences
 link_libraries(stdc++fs)
-link_directories("/usr/local/lib")
+link_directories("/usr/local/lib" "/usr/lib/x86_64-linux-gnu/hdf5/serial")
 
 
 
 add_executable(face main.cpp)
-target_link_libraries(face ${Boost_LIBRARIES} -luuid -lbsoncxx -ldlib -lX11 -ljpeg -lpng -lgif -lblas -lcblas -llapack -lpthread)
+target_link_libraries(face ${Boost_LIBRARIES} -luuid -ldlib -lX11 -ljpeg -lpng -lgif -lblas -lcblas -llapack -lpthread -lbsoncxx -lmongocxx)
 
+add_executable(test_flann_example test/test_flann_example.cpp)
+target_link_libraries(test_flann_example -lhdf5 -llz4)
+
+add_executable(test_mongo test/test_mongo.cpp)
+target_link_libraries(test_mongo -lbsoncxx -lmongocxx)
 
 
 #add_executable(test_uuid test/test_uuid.cpp)
@@ -78,5 +89,5 @@ target_link_libraries(face ${Boost_LIBRARIES} -luuid -lbsoncxx -ldlib -lX11 -ljp
 #
 #add_executable(test_annoy_precision test/test_annoy_precision.cpp)
 #
-#add_executable(test_build_face_index test/test_build_face_index.cpp)
-#target_link_libraries(test_build_face_index ${Boost_LIBRARIES} -luuid -lbsoncxx -ldlib -lX11 -ljpeg -lpng -lgif -lblas -lcblas -llapack -lpthread)
+add_executable(test_build_face_index test/test_build_face_index.cpp)
+target_link_libraries(test_build_face_index ${Boost_LIBRARIES} -luuid -lbsoncxx -ldlib -lX11 -ljpeg -lpng -lgif -lblas -lcblas -llapack -lpthread)
