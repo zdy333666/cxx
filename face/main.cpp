@@ -3,7 +3,7 @@
 //
 
 /**
- *  https://github.com/qicosmos/cinatra
+ *
  */
 
 #include "http_server.hpp"
@@ -23,7 +23,7 @@ using json = nlohmann::json;
 //日志切面
 struct log_t {
     bool before(request &req, response &res) {
-        std::cout << "before log" << std::endl;
+        std::cout << "before log -- thread id: " << std::this_thread::get_id() << std::endl;
         return true;
     }
 
@@ -32,6 +32,81 @@ struct log_t {
         return true;
     }
 };
+
+
+/**
+ *
+ * @param group_id
+ */
+void build_group_face_index(std::string &group_id) {
+
+    boost::container::stable_vector<std::string> face_infos = faceset::face::getlist(group_id);
+
+    if (face_infos.empty()) {
+        return;
+    }
+
+    boost::container::stable_vector<std::string> user_ids;
+    boost::container::stable_vector<std::vector<double>> feature_list;
+
+    for (std::string face_info_str : face_infos) {
+
+        json face_info_json = json::parse(face_info_str);
+        std::string user_id = face_info_json["user_id"];
+        std::vector<double> features = face_info_json["descriptor"];
+
+        user_ids.push_back(user_id);
+        feature_list.push_back(features);
+    }
+
+//    face_infos.clear();
+
+    face::build_group_index(group_id, user_ids, feature_list);
+
+    std::cout << "user_ids clear ..." << std::endl;
+    user_ids.clear();
+    boost::container::stable_vector<std::string>().swap(user_ids);
+    std::cout << "user_ids cleared" << std::endl;
+
+    std::cout << "feature_list clear ..." << std::endl;
+    feature_list.clear();
+    boost::container::stable_vector<std::vector<double>>().swap(feature_list);
+    std::cout << "feature_list cleared" << std::endl;
+
+    std::cout << "face_infos clear ..." << std::endl;
+    face_infos.clear();
+    boost::container::stable_vector<std::string>().swap(face_infos);
+    std::cout << "face_infos cleared" << std::endl;
+}
+
+
+/**
+ *
+ */
+void build_all_face_index() {
+
+    try {
+
+        boost::container::stable_vector<std::string> group_infos = faceset::group::getlist(0, INT_MAX);
+        for (std::string group_info_str : group_infos) {
+
+            json group_info_json = json::parse(group_info_str);
+            std::string group_id = group_info_json["group_id"];
+
+            build_group_face_index(group_id);
+        }
+
+        std::cout << "build face index of group count:" << group_infos.size() << std::endl;
+
+        std::cout << "group_infos clear ..." << std::endl;
+        group_infos.clear();
+        boost::container::stable_vector<std::string>().swap(group_infos);
+        std::cout << "group_infos cleared" << std::endl;
+
+    } catch (std::exception &e) {
+        std::cout << e.what() << std::endl;
+    }
+}
 
 
 int main() {
@@ -48,13 +123,15 @@ int main() {
 
 
     server.set_http_handler<GET, POST>("/", [](request &req, response &res) {
-        res.set_status_and_content(status_type::ok, "hello world");
+
+        res.set_status_and_content(status_type::ok, "hello face");
+
     }, log_t{});
 
 
     server.set_http_handler<GET, POST>("/test/json", [](request &req, response &res) {
 
-        json result;
+        json result = json::object();
         result["name"] = "tom";
         result["age"] = 20;
         result["list"] = {10, 20, 30};
@@ -69,98 +146,159 @@ int main() {
     /**
      * face detect
      */
-    server.set_http_handler<GET, POST>("/face/v1/detect", [](request &req, response &res) {
+    server.set_http_handler<POST>("/face/v1/detect", [](request &req, response &res) {
 
-        // process request body
+        json result = json::object();
 
-        std::string_view body = req.body();
-        json param = json::parse(body);
+        try {
+            // process request body
+
+            std::string_view body = req.body();
+            json param = json::parse(body);
 
 //        std::cout << "param:" << param << std::endl;
 
 
-        std::string image = param["image"].get<std::string>();
-        std::string image_type = param["image_type"].get<std::string>();
-        std::string face_field = param["face_field"].get<std::string>();
-        int max_face_num = param["max_face_num"].get<int>();
+            std::string image = param["image"].get<std::string>();
+            std::string image_type = param["image_type"].get<std::string>();
+            std::string face_field = param["face_field"].get<std::string>();
+            int max_face_num = param["max_face_num"].get<int>();
 
+            std::string raw_image;
 
-        // decode base64 string
-        if ("BASE64" == image_type) {
+            // decode base64 string
+            if ("BASE64" == image_type) {
 
-            long t_start, t_end;
-            t_start = utils::timestamp();
+                long t_start, t_end;
+                t_start = utils::timestamp();
 
-            std::ostringstream sout;
-            std::istringstream sin;
+                std::ostringstream* sout = new std::ostringstream();
+                std::istringstream* sin = new std::istringstream();
 
-            sin.str(image);
+                (*sin).str(image);
 
-            // base64编码器对象
-            dlib::base64 base64_coder;
-            base64_coder.decode(sin, sout);
+                // base64编码器对象
+                dlib::base64 base64_coder;
+                base64_coder.decode(*sin, *sout);
 
-            t_end = utils::timestamp();
-            std::cout << "decode base64 image in " << t_end - t_start << " ms" << std::endl;
+                t_end = utils::timestamp();
+                std::cout << "decode base64 image in " << t_end - t_start << " ms" << std::endl;
 
-            std::cout << "base64 size:" << image.size() << std::endl;
-            image = sout.str();
-            std::cout << "decode size:" << image.size() << std::endl;
+                std::cout << "base64 size:" << image.size() << std::endl;
+                raw_image = (*sout).str();
+                std::cout << "decode size:" << raw_image.size() << std::endl;
 
-            sin.clear();
-            sout.clear();
-        }
+                (*sin).clear();
+                delete sin;
+                sin = NULL;
 
-
-        // do detect ...
-        std::vector<face::FaceInfo> faceInfos = face::face_detect(image, max_face_num);
-
-
-        // builder response body
-
-        json face_list_json;
-
-        for (face::FaceInfo faceInfo : faceInfos) {
-            std::string face_token = faceInfo.get_face_token();
-            double face_probability = faceInfo.get_face_probability();
-            std::string label = faceInfo.get_label();
-            face::Location location = faceInfo.get_location();
-            std::vector<face::Point> landmarks = faceInfo.get_landmarks();
-
-            json landmark_json;
-            for (face::Point landmark : landmarks) {
-
-                json point_json = {{"x", landmark.x},
-                                   {"y", landmark.y}};
-
-                landmark_json.push_back(point_json);
+                (*sout).clear();
+                delete sout;
+                sout = NULL;
             }
 
-            json face_json;
-            face_json["face_token"] = face_token;
-            face_json["face_probability"] = face_probability;
-            face_json["label"] = label;
-            face_json["location"] = {{"left",     location.left},
-                                     {"top",      location.top},
-                                     {"width",    location.width},
-                                     {"height",   location.height},
-                                     {"rotation", location.rotation}};
-            face_json["landmark"] = landmark_json;
+            std::string log_id = bsoncxx::oid().to_string();
 
-            face_list_json.push_back(face_json);
+            dlib::matrix<dlib::rgb_pixel> img;
+            face::local_load_image(img, raw_image, log_id);
+
+            raw_image.clear();
+            std::string().swap(raw_image);
+
+            // do detect ...
+            boost::container::stable_vector<face::FaceInfo*>* faceInfos = new boost::container::stable_vector<face::FaceInfo*>();
+            face::face_detect(faceInfos, img, max_face_num);
+
+            dlib::matrix<dlib::rgb_pixel>().swap(img);
+
+
+//            if (faceInfos.size() > 0) {
+//                faceset::image::add(log_id, image);
+//            }
+
+            // builder response body
+
+            json face_list_json = json::array();
+
+            for (face::FaceInfo* faceInfo : *faceInfos) {
+                std::string face_token = (*faceInfo).get_face_token();
+                double face_probability = (*faceInfo).get_face_probability();
+                std::string label = (*faceInfo).get_label();
+                face::Location* location = (*faceInfo).get_location();
+                boost::container::stable_vector<face::Point*>* landmarks = (*faceInfo).get_landmarks();
+
+                json landmark_json = json::array();
+                for (face::Point* landmark : *landmarks) {
+
+                    json point_json = {{"x", (*landmark).x},
+                                       {"y", (*landmark).y}};
+
+                    landmark_json.push_back(point_json);
+                }
+
+                json face_json = json::object();
+                face_json["face_token"] = face_token;
+                face_json["face_probability"] = face_probability;
+                face_json["label"] = label;
+                face_json["location"] = {{"left",     (*location).left},
+                                         {"top",      (*location).top},
+                                         {"width",    (*location).width},
+                                         {"height",   (*location).height},
+                                         {"rotation", (*location).rotation}};
+                face_json["landmark"] = landmark_json;
+
+                face_list_json.push_back(face_json);
+            }
+
+            int face_num = (*faceInfos).size();
+
+
+            for(face::FaceInfo* faceInfo : *faceInfos){
+
+                face::Location* location  = faceInfo->get_location();
+                delete location;
+                location = NULL;
+
+                boost::container::stable_vector<face::Point*>* landmarks = faceInfo->get_landmarks();
+                for(face::Point* point : *landmarks){
+                    delete point;
+                    point = NULL;
+                }
+
+                delete landmarks;
+                landmarks = NULL;
+
+
+                boost::container::stable_vector<double>* descriptors = faceInfo->get_descriptors();
+                delete descriptors;
+                descriptors = NULL;
+
+                delete faceInfo;
+                faceInfo = NULL;
+            }
+
+            delete faceInfos;
+            faceInfos = NULL;
+
+
+            json result_json = json::object();
+            result_json["face_num"] = face_num;
+            result_json["face_list"] = face_list_json;
+
+            result["error_code"] = 0;
+            result["error_msg"] = "SUCCESS";
+            result["log_id"] = log_id;
+            result["timestamp"] = utils::timestamp();
+            result["cached"] = 0;
+            result["result"] = result_json;
+
+        } catch (std::exception &e) {
+            std::cout << e.what() << std::endl;
+
+            result["error_code"] = 1;
+            result["log_id"] = bsoncxx::oid().to_string();
+            result["error_msg"] = e.what();
         }
-
-        json result_json;
-        result_json["face_num"] = faceInfos.size();
-        result_json["face_list"] = face_list_json;
-
-        json result;
-        result["error_code"] = 0;
-        result["error_msg"] = "SUCCESS";
-        result["log_id"] = bsoncxx::oid().to_string();
-        result["timestamp"] = utils::timestamp();
-        result["cached"] = 0;
-        result["result"] = result_json;
 
         res.add_header("Content-Type", "application/json");
         res.set_status_and_content(status_type::ok, result.dump());
@@ -172,79 +310,167 @@ int main() {
     /**
      * face search
      */
-    server.set_http_handler<GET, POST>("/face/v1/search", [](request &req, response &res) {
+    server.set_http_handler<POST>("/face/v1/search", [](request &req, response &res) {
 
-        // process request body
+        json result = json::object();
 
-        std::string_view body = req.body();
-        json param = json::parse(body);
+        try {
+            // process request body
+
+            std::string_view body = req.body();
+            json param = json::parse(body);
 
 //        std::cout << "param:" << param << std::endl;
 
-        std::string image = param["image"].get<std::string>();
-        std::string image_type = param["image_type"].get<std::string>();
-        std::string group_id_list = param["group_id_list"].get<std::string>();
-        int max_user_num = param["max_user_num"].get<int>();
+            std::string image = param["image"].get<std::string>();
+            std::string image_type = param["image_type"].get<std::string>();
+            std::string group_id_list = param["group_id_list"].get<std::string>();
+            int max_user_num = param["max_user_num"].get<int>();
 
-        // decode base64 string
-        if ("BASE64" == image_type) {
+            std::string raw_image;
 
-            long t_start, t_end;
-            t_start = utils::timestamp();
+            // decode base64 string
+            if ("BASE64" == image_type) {
 
-            std::ostringstream sout;
-            std::istringstream sin;
+                long t_start, t_end;
+                t_start = utils::timestamp();
 
-            sin.str(image);
+                std::ostringstream* sout = new std::ostringstream();
+                std::istringstream* sin = new std::istringstream();
 
-            // base64编码器对象
-            dlib::base64 base64_coder;
-            base64_coder.decode(sin, sout);
+                (*sin).str(image);
 
-            t_end = utils::timestamp();
-            std::cout << "decode base64 image in " << t_end - t_start << " ms" << std::endl;
+                // base64编码器对象
+                dlib::base64 base64_coder;
+                base64_coder.decode(*sin, *sout);
 
-            std::cout << "base64 size:" << image.size() << std::endl;
-            image = sout.str();
-            std::cout << "decode size:" << image.size() << std::endl;
+                t_end = utils::timestamp();
+                std::cout << "decode base64 image in " << t_end - t_start << " ms" << std::endl;
 
-            sin.clear();
-            sout.clear();
-        }
+                std::cout << "base64 size:" << image.size() << std::endl;
+                raw_image = (*sout).str();
+                std::cout << "decode size:" << raw_image.size() << std::endl;
 
+                (*sin).clear();
+                delete sin;
+                sin = NULL;
 
-        // do search ...
-
-        std::vector<face::FaceInfo> faceInfos = face::face_detect(image, 1);
-
-        json result;
-
-        if (faceInfos.size() > 0) {
-
-            face::FaceInfo faceInfo = faceInfos[0];
-
-            std::string face_token = faceInfo.get_face_token();
-            std::vector<double> descriptors = faceInfo.get_descriptors();
-
-            std::vector<face::UserInfo> userInfos = face::user_search(descriptors.data(), max_user_num, group_id_list);
-
-            json user_list_json;
-            for (face::UserInfo userInfo : userInfos) {
-                json user_json;
-                user_json["group_id"] = userInfo.group_id;
-                user_json["user_id"] = userInfo.user_id;
-                user_json["user_info"] = userInfo.user_info;
-                user_json["score"] = userInfo.score;
-
-                user_list_json.push_back(user_json);
+                (*sout).clear();
+                delete sout;
+                sout = NULL;
             }
 
-            result["face_token"] = face_token;
-            result["user_list"] = user_list_json;
+            std::string log_id = bsoncxx::oid().to_string();
+
+            dlib::matrix<dlib::rgb_pixel> img;
+            face::local_load_image(img, raw_image, log_id);
+
+            raw_image.clear();
+            std::string().swap(raw_image);
+
+            // do search ...
+
+            boost::container::stable_vector<face::FaceInfo*>* faceInfos = new boost::container::stable_vector<face::FaceInfo*>();
+            face::face_detect(faceInfos, img, 1);
+
+            dlib::matrix<dlib::rgb_pixel>().swap(img);
+
+
+            if ((*faceInfos).size() > 0) {
+
+//                faceset::image::add(log_id, image);
+
+
+                face::FaceInfo* faceInfo = (*faceInfos)[0];
+
+                std::string face_token = (*faceInfo).get_face_token();
+                boost::container::stable_vector<double> *descriptors = (*faceInfo).get_descriptors();
+
+                std::vector <string> group_ids = dlib::split(group_id_list, ",");
+                for(std::string group_id : group_ids){
+                    std::cout << "group_id:" << group_id << std::endl;
+                }
+
+                double* descriptors_arrar = new double[(*descriptors).size()];
+                for(int n = 0; n< (*descriptors).size(); n++){
+                    descriptors_arrar[n] = (*descriptors)[n];
+                }
+
+
+                boost::container::stable_vector<face::UserInfo*>* userInfos = new boost::container::stable_vector<face::UserInfo*>();
+                face::user_search(userInfos, descriptors_arrar, max_user_num, &group_ids);
+
+                delete[] descriptors_arrar;
+                descriptors_arrar = NULL;
+
+                group_ids.clear();
+                std::vector <string>().swap(group_ids);
+
+
+                json user_list_json = json::array();
+                for (face::UserInfo* userInfo : *userInfos) {
+
+                    json user_info_json = json::object();
+
+                    boost::container::stable_vector<std::string> user_list = faceset::user::get((*userInfo).group_id, (*userInfo).user_id);
+                    if (user_list.size() > 0) {
+                        json user_json = json::parse(user_list[0]);
+                        user_info_json = user_json["user_info"];
+                    }
+                    user_list.clear();
+                    boost::container::stable_vector<std::string>().swap(user_list);
+
+                    json user_json = json::object();
+                    user_json["group_id"] = (*userInfo).group_id;
+                    user_json["user_id"] = (*userInfo).user_id;
+                    user_json["user_info"] = user_info_json;
+                    user_json["score"] = (*userInfo).score;
+
+                    user_list_json.push_back(user_json);
+
+
+                    delete userInfo;
+                    userInfo = NULL;
+                }
+
+                delete userInfos;
+                userInfos = NULL;
+
+                result["face_token"] = face_token;
+                result["user_list"] = user_list_json;
+            }
+
+
+            for(face::FaceInfo* faceInfo : *faceInfos){
+
+                face::Location* location  = faceInfo->get_location();
+                delete location;
+                location = NULL;
+
+                boost::container::stable_vector<face::Point*>* landmarks = faceInfo->get_landmarks();
+                for(face::Point* point : *landmarks){
+                    delete point;
+                    point = NULL;
+                }
+
+                delete landmarks;
+                landmarks = NULL;
+
+
+                boost::container::stable_vector<double>* descriptors = faceInfo->get_descriptors();
+                delete descriptors;
+                descriptors = NULL;
+
+                delete faceInfo;
+                faceInfo = NULL;
+            }
+
+            delete faceInfos;
+            faceInfos = NULL;
+
+        } catch (std::exception &e) {
+            std::cout << e.what() << std::endl;
         }
-
-
-        // builder response body
 
         res.add_header("Content-Type", "application/json");
         res.set_status_and_content(status_type::ok, result.dump());
@@ -255,98 +481,201 @@ int main() {
     /**
      * face multi-search
      */
-    server.set_http_handler<GET, POST>("/face/v1/multi-search", [](request &req, response &res) {
+    server.set_http_handler<POST>("/face/v1/multi-search", [](request &req, response &res) {
 
-        // process request body
+        json result = json::object();
 
-        std::string_view body = req.body();
-        json param = json::parse(body);
+        try {
+            // process request body
+
+            std::string_view body = req.body();
+            json param = json::parse(body);
 
 //        std::cout << "param:" << param << std::endl;
 
-        std::string image = param["image"].get<std::string>();
-        std::string image_type = param["image_type"].get<std::string>();
-        std::string group_id_list = param["group_id_list"].get<std::string>();
-        int max_face_num = param["max_face_num"].get<int>();
-        int max_user_num = param["max_user_num"].get<int>();
+            std::string image = param["image"].get<std::string>();
+            std::string image_type = param["image_type"].get<std::string>();
+            std::string group_id_list = param["group_id_list"].get<std::string>();
+            int max_face_num = param["max_face_num"].get<int>();
+            int max_user_num = param["max_user_num"].get<int>();
 
-        // decode base64 string
-        if ("BASE64" == image_type) {
+            // decode base64 string
+            std::string raw_image;
 
-            long t_start, t_end;
-            t_start = utils::timestamp();
+            // decode base64 string
+            if ("BASE64" == image_type) {
 
-            std::ostringstream sout;
-            std::istringstream sin;
+                long t_start, t_end;
+                t_start = utils::timestamp();
 
-            sin.str(image);
+                std::ostringstream* sout = new std::ostringstream();
+                std::istringstream* sin = new std::istringstream();
 
-            // base64编码器对象
-            dlib::base64 base64_coder;
-            base64_coder.decode(sin, sout);
+                (*sin).str(image);
 
-            t_end = utils::timestamp();
-            std::cout << "decode base64 image in " << t_end - t_start << " ms" << std::endl;
+                // base64编码器对象
+                dlib::base64 base64_coder;
+                base64_coder.decode(*sin, *sout);
 
-            std::cout << "base64 size:" << image.size() << std::endl;
-            image = sout.str();
-            std::cout << "decode size:" << image.size() << std::endl;
+                t_end = utils::timestamp();
+                std::cout << "decode base64 image in " << t_end - t_start << " ms" << std::endl;
 
-            sin.clear();
-            sout.clear();
-        }
+                std::cout << "base64 size:" << image.size() << std::endl;
+                raw_image = (*sout).str();
+                std::cout << "decode size:" << raw_image.size() << std::endl;
 
+                (*sin).clear();
+                delete sin;
+                sin = NULL;
 
-        // do search ...
-
-        std::vector<face::FaceInfo> faceInfos = face::face_detect(image, max_face_num);
-
-        json face_list;
-
-        for (face::FaceInfo faceInfo : faceInfos) {
-            std::string face_token = faceInfo.get_face_token();
-            face::Location location = faceInfo.get_location();
-            std::vector<double> descriptors = faceInfo.get_descriptors();
-
-            std::vector<face::UserInfo> userInfos = face::user_search(descriptors.data(), max_user_num, group_id_list);
-
-            json user_list_json;
-            for (face::UserInfo userInfo : userInfos) {
-                json user_json;
-                user_json["group_id"] = userInfo.group_id;
-                user_json["user_id"] = userInfo.user_id;
-                user_json["user_info"] = userInfo.user_info;
-                user_json["score"] = userInfo.score;
-
-                user_list_json.push_back(user_json);
+                (*sout).clear();
+                delete sout;
+                sout = NULL;
             }
 
-            json face_json;
-            face_json["face_token"] = face_token;
-            face_json["location"] = {{"left",     location.left},
-                                     {"top",      location.top},
-                                     {"width",    location.width},
-                                     {"height",   location.height},
-                                     {"rotation", location.rotation}};
-            face_json["user_list"] = user_list_json;
+            std::string log_id = bsoncxx::oid().to_string();
 
-            face_list.push_back(face_json);
+            dlib::matrix<dlib::rgb_pixel> img;
+            face::local_load_image(img, raw_image, log_id);
+
+            raw_image.clear();
+            std::string().swap(raw_image);
+
+            // do search ...
+
+            boost::container::stable_vector<face::FaceInfo*>* faceInfos = new boost::container::stable_vector<face::FaceInfo*>();
+            face::face_detect(faceInfos, img, max_face_num);
+
+            dlib::matrix<dlib::rgb_pixel>().swap(img);
+
+//            if (faceInfos.size() > 0) {
+//                faceset::image::add(log_id, image);
+//            }
+
+            json face_list = json::array();
+
+            for (face::FaceInfo* faceInfo : *faceInfos) {
+
+                std::string face_token = (*faceInfo).get_face_token();
+                face::Location location = *(*faceInfo).get_location();
+                boost::container::stable_vector<double> descriptors = *(*faceInfo).get_descriptors();
+
+                std::vector <string> group_ids = dlib::split(group_id_list, ",");
+                for(std::string group_id : group_ids){
+                    std::cout << "group_id:" << group_id << std::endl;
+                }
+
+                double* descriptors_arrar = new double[descriptors.size()];
+                for(int n = 0; n < descriptors.size(); n++){
+                    descriptors_arrar[n] = descriptors[n];
+                }
+
+
+                boost::container::stable_vector<face::UserInfo*>* userInfos = new boost::container::stable_vector<face::UserInfo*>();
+                face::user_search(userInfos, descriptors_arrar, max_user_num, &group_ids);
+
+                delete[] descriptors_arrar;
+                descriptors_arrar = NULL;
+
+                group_ids.clear();
+                std::vector<string>().swap(group_ids);
+
+
+                json user_list_json = json::array();
+                for (face::UserInfo* userInfo : *userInfos) {
+
+                    json user_info_json = json::object();
+
+                    boost::container::stable_vector<std::string> user_list = faceset::user::get(userInfo->group_id, userInfo->user_id);
+                    if (user_list.size() > 0) {
+                        json user_json = json::parse(user_list[0]);
+                        user_info_json = user_json["user_info"];
+                    }
+                    user_list.clear();
+                    boost::container::stable_vector<std::string>().swap(user_list);
+
+                    json user_json = json::object();
+                    user_json["group_id"] = userInfo->group_id;
+                    user_json["user_id"] = userInfo->user_id;
+                    user_json["user_info"] = user_info_json;
+                    user_json["score"] = userInfo->score;
+
+                    user_list_json.push_back(user_json);
+
+
+                    delete userInfo;
+                    userInfo = NULL;
+                }
+
+                delete userInfos;
+                userInfos = NULL;
+
+
+                json face_json = json::object();
+                face_json["face_token"] = face_token;
+                face_json["location"] = {{"left",     location.left},
+                                         {"top",      location.top},
+                                         {"width",    location.width},
+                                         {"height",   location.height},
+                                         {"rotation", location.rotation}};
+                face_json["user_list"] = user_list_json;
+
+                face_list.push_back(face_json);
+            }
+
+            int face_num = (*faceInfos).size();
+
+
+            for(face::FaceInfo* faceInfo : *faceInfos){
+
+                face::Location* location  = faceInfo->get_location();
+                delete location;
+                location = NULL;
+
+                boost::container::stable_vector<face::Point*>* landmarks = faceInfo->get_landmarks();
+                for(face::Point* point : *landmarks){
+                    delete point;
+                    point = NULL;
+                }
+
+                delete landmarks;
+                landmarks = NULL;
+
+
+                boost::container::stable_vector<double>* descriptors = faceInfo->get_descriptors();
+                delete descriptors;
+                descriptors = NULL;
+
+                delete faceInfo;
+                faceInfo = NULL;
+            }
+
+            delete faceInfos;
+            faceInfos = NULL;
+
+
+            json result_json = json::object();
+            result_json["face_num"] = face_num;
+            result_json["face_list"] = face_list;
+
+
+            // builder response body
+
+            result["error_code"] = 0;
+            result["error_msg"] = "SUCCESS";
+            result["log_id"] = bsoncxx::oid().to_string();
+            result["timestamp"] = utils::timestamp();
+            result["cached"] = 0;
+            result["result"] = result_json;
+
+
+        } catch (std::exception &e) {
+            std::cout << e.what() << std::endl;
+
+            result["error_code"] = 1;
+            result["log_id"] = bsoncxx::oid().to_string();
+            result["error_msg"] = e.what();
         }
-
-        json result_json;
-        result_json["face_num"] = faceInfos.size();
-        result_json["face_list"] = face_list;
-
-
-        // builder response body
-
-        json result;
-        result["error_code"] = 0;
-        result["error_msg"] = "SUCCESS";
-        result["log_id"] = bsoncxx::oid().to_string();
-        result["timestamp"] = utils::timestamp();
-        result["cached"] = 0;
-        result["result"] = result_json;
 
         res.add_header("Content-Type", "application/json");
         res.set_status_and_content(status_type::ok, result.dump());
@@ -362,27 +691,37 @@ int main() {
      *
      * faceset add group
      */
-    server.set_http_handler<GET, POST>("/face/v1/faceset/group/add", [](request &req, response &res) {
+    server.set_http_handler<POST>("/face/v1/faceset/group/add", [](request &req, response &res) {
 
-        // process request body
+        json result = json::object();
 
-        std::string_view body = req.body();
-        json param = json::parse(body);
+        try {
+            // process request body
 
-        std::cout << "param:" << param << std::endl;
+            std::string_view body = req.body();
+            json param = json::parse(body);
 
-        std::string group_id = param["group_id"].get<std::string>();
-        std::string group_name = param["group_name"].get<std::string>();
+            std::cout << "param:" << param << std::endl;
+
+            std::string group_id = param["group_id"].get<std::string>();
+            std::string group_name = param["group_name"].get<std::string>();
 
 
-        faceset::group::add(group_id, group_name);
+            faceset::group::add(group_id, group_name);
 
-        // builder response body
+            // builder response body
 
-        json result;
-        result["error_code"] = 0;
-        result["error_msg"] = "SUCCESS";
-        result["log_id"] = bsoncxx::oid().to_string();
+            result["error_code"] = 0;
+            result["error_msg"] = "SUCCESS";
+            result["log_id"] = bsoncxx::oid().to_string();
+
+        } catch (std::exception &e) {
+            std::cout << e.what() << std::endl;
+
+            result["error_code"] = 1;
+            result["log_id"] = bsoncxx::oid().to_string();
+            result["error_msg"] = e.what();
+        }
 
         res.add_header("Content-Type", "application/json");
         res.set_status_and_content(status_type::ok, result.dump());
@@ -394,31 +733,36 @@ int main() {
      *
      * faceset group getlist
      */
-    server.set_http_handler<GET, POST>("/face/v1/faceset/group/getlist", [](request &req, response &res) {
+    server.set_http_handler<POST>("/face/v1/faceset/group/getlist", [](request &req, response &res) {
 
-        // process request body
+        json result = json::object();
 
-        std::string_view body = req.body();
-        json param = json::parse(body);
+        try {
+            // process request body
 
-        std::cout << "param:" << param << std::endl;
+            std::string_view body = req.body();
+            json param = json::parse(body);
 
-        int start = param["start"].get<int>();
-        int length = param["length"].get<int>();
+            std::cout << "param:" << param << std::endl;
+
+            int start = param["start"].get<int>();
+            int length = param["length"].get<int>();
 
 
-        std::vector<std::string> groups = faceset::group::getlist(start, length);
+            boost::container::stable_vector<std::string> groups = faceset::group::getlist(start, length);
 
+            // builder response body
 
-        // builder response body
+            json group_id_list_json = json::array();
+            for (std::string group_json_str : groups) {
+                group_id_list_json.push_back(json::parse(group_json_str));
+            }
 
-        json group_id_list_json;
-        for (std::string group_json_str : groups) {
-            group_id_list_json.push_back(group_json_str);
+            result["group_id_list"] = group_id_list_json;
+
+        } catch (std::exception &e) {
+            std::cout << e.what() << std::endl;
         }
-
-        json result;
-        result["group_id_list"] = group_id_list_json;
 
         res.add_header("Content-Type", "application/json");
         res.set_status_and_content(status_type::ok, result.dump());
@@ -430,33 +774,41 @@ int main() {
      *
      * faceset group getusers
      */
-    server.set_http_handler<GET, POST>("/face/v1/faceset/group/getusers", [](request &req, response &res) {
+    server.set_http_handler<POST>("/face/v1/faceset/group/getusers", [](request &req, response &res) {
 
-        // process request body
+        json result = json::object();
 
-        std::string_view body = req.body();
-        json param = json::parse(body);
+        try {
+            // process request body
 
-        std::cout << "param:" << param << std::endl;
+            std::string_view body = req.body();
+            json param = json::parse(body);
 
-        std::string group_id = param["group_id"].get<std::string>();
-        int start = param["start"].get<int>();
-        int length = param["length"].get<int>();
+            std::cout << "param:" << param << std::endl;
+
+            std::string group_id = param["group_id"].get<std::string>();
+            int start = param["start"].get<int>();
+            int length = param["length"].get<int>();
 
 
-        // builder response body
+            // builder response body
 
-        std::vector<std::string> users = faceset::group::getusers(group_id, start, length);
+            boost::container::stable_vector<std::string> users = faceset::group::getusers(group_id, start, length);
 
-        // builder response body
+            // builder response body
 
-        json user_id_list_json;
-        for (std::string user_json_str : users) {
-            user_id_list_json.push_back(user_json_str);
+            json user_id_list_json = json::array();
+            for (std::string user_json_str : users) {
+                user_id_list_json.push_back(json::parse(user_json_str));
+            }
+
+            users.clear();
+
+            result["user_id_list"] = user_id_list_json;
+
+        } catch (std::exception &e) {
+            std::cout << e.what() << std::endl;
         }
-
-        json result;
-        result["user_id_list"] = user_id_list_json;
 
         res.add_header("Content-Type", "application/json");
         res.set_status_and_content(status_type::ok, result.dump());
@@ -468,26 +820,36 @@ int main() {
      *
      * faceset group delete
      */
-    server.set_http_handler<GET, POST>("/face/v1/faceset/group/delete", [](request &req, response &res) {
+    server.set_http_handler<POST>("/face/v1/faceset/group/delete", [](request &req, response &res) {
 
-        // process request body
+        json result = json::object();
 
-        std::string_view body = req.body();
-        json param = json::parse(body);
+        try {
+            // process request body
 
-        std::cout << "param:" << param << std::endl;
+            std::string_view body = req.body();
+            json param = json::parse(body);
 
-        std::string group_id = param["group_id"].get<std::string>();
+            std::cout << "param:" << param << std::endl;
+
+            std::string group_id = param["group_id"].get<std::string>();
 
 
-        faceset::group::delete_one(group_id);
+            faceset::group::delete_one(group_id);
 
 
-        // builder response body
+            // builder response body
 
-        json result;
-        result["error_code"] = 0;
-        result["log_id"] = bsoncxx::oid().to_string();
+            result["error_code"] = 0;
+            result["log_id"] = bsoncxx::oid().to_string();
+
+        } catch (std::exception &e) {
+            std::cout << e.what() << std::endl;
+
+            result["error_code"] = 1;
+            result["log_id"] = bsoncxx::oid().to_string();
+            result["error_msg"] = e.what();
+        }
 
         res.add_header("Content-Type", "application/json");
         res.set_status_and_content(status_type::ok, result.dump());
@@ -499,63 +861,147 @@ int main() {
      *
      * faceset add user
      */
-    server.set_http_handler<GET, POST>("/face/v1/faceset/user/add", [](request &req, response &res) {
+    server.set_http_handler<POST>("/face/v1/faceset/user/add", [](request &req, response &res) {
 
-        // process request body
+        json result = json::object();
 
-        std::string_view body = req.body();
-        json param = json::parse(body);
+        try {
+            // process request body
 
-        std::cout << "param:" << param << std::endl;
+            std::string_view body = req.body();
+            json param = json::parse(body);
 
-        std::string image = param["image"].get<std::string>();
-        std::string image_type = param["image_type"].get<std::string>();
-        std::string group_id = param["group_id"].get<std::string>();
-        std::string user_id = param["user_id"].get<std::string>();
-        std::string user_info = param["user_info"].get<std::string>();
-        std::string quality_control = param["quality_control"].get<std::string>();
-        std::string liveness_control = param["liveness_control"].get<std::string>();
-        std::string action_type = param["action_type"].get<std::string>();
+//            std::cout << "param:" << param << std::endl;
 
-        // decode base64 string
-        if ("BASE64" == image_type) {
+            std::string image = param["image"].get<std::string>();
+            std::string image_type = param["image_type"].get<std::string>();
+            std::string group_id = param["group_id"].get<std::string>();
+            std::string user_id = param["user_id"].get<std::string>();
+            std::string user_info = param["user_info"].get<std::string>();
+//            std::string quality_control = param["quality_control"].get<std::string>();
+//            std::string liveness_control = param["liveness_control"].get<std::string>();
+            std::string action_type = param["action_type"].get<std::string>();
 
-            long t_start, t_end;
-            t_start = utils::timestamp();
+            std::string raw_image;
 
-            std::ostringstream sout;
-            std::istringstream sin;
+            // decode base64 string
+            if ("BASE64" == image_type) {
 
-            sin.str(image);
+                long t_start, t_end;
+                t_start = utils::timestamp();
 
-            // base64编码器对象
-            dlib::base64 base64_coder;
-            base64_coder.decode(sin, sout);
+                std::ostringstream* sout = new std::ostringstream();
+                std::istringstream* sin = new std::istringstream();
 
-            t_end = utils::timestamp();
-            std::cout << "decode base64 image in " << t_end - t_start << " ms" << std::endl;
+                (*sin).str(image);
 
-            std::cout << "base64 size:" << image.size() << std::endl;
-            image = sout.str();
-            std::cout << "decode size:" << image.size() << std::endl;
+                // base64编码器对象
+                dlib::base64 base64_coder;
+                base64_coder.decode(*sin, *sout);
 
-            sin.clear();
-            sout.clear();
+                t_end = utils::timestamp();
+                std::cout << "decode base64 image in " << t_end - t_start << " ms" << std::endl;
+
+                std::cout << "base64 size:" << image.size() << std::endl;
+                raw_image = (*sout).str();
+                std::cout << "decode size:" << raw_image.size() << std::endl;
+
+                (*sin).clear();
+                delete sin;
+                sin = NULL;
+
+                (*sout).clear();
+                delete sout;
+                sout = NULL;
+            }
+
+
+            // do add ...
+
+            std::string log_id = bsoncxx::oid().to_string();
+
+            dlib::matrix<dlib::rgb_pixel> img ;
+            face::local_load_image(img, raw_image, log_id);
+
+            raw_image.clear();
+            std::string().swap(raw_image);
+
+
+            boost::container::stable_vector<face::FaceInfo*>* faceInfos = new boost::container::stable_vector<face::FaceInfo*>();
+            face::face_detect(faceInfos, img, 1);
+
+            dlib::matrix<dlib::rgb_pixel>().swap(img);
+
+            if ((*faceInfos).size() > 0) {
+
+                faceset::image::add(log_id, image);
+
+                face::FaceInfo faceInfo = *((*faceInfos)[0]);
+                std::string face_token = faceInfo.get_face_token();
+                face::Location location = *faceInfo.get_location();
+                boost::container::stable_vector<double> descriptors = *faceInfo.get_descriptors();
+
+                double* descriptors_arrar = new double[descriptors.size()];
+                for(int n = 0; n< descriptors.size(); n++){
+                    descriptors_arrar[n] = descriptors[n];
+                }
+
+
+                if (action_type == "APPEND") {
+                    // ...
+                } else if (action_type == "REPLACE ") {
+                    faceset::user::delete_one(group_id, user_id);
+                }
+
+                faceset::user::upsert(group_id, user_id, user_info);
+                faceset::face::add(group_id, user_id, log_id, face_token, descriptors_arrar);
+
+                delete[] descriptors_arrar;
+                descriptors_arrar = NULL;
+
+                result["face_token"] = face_token;
+                result["location"] = {{"left",     location.left},
+                                      {"top",      location.top},
+                                      {"width",    location.width},
+                                      {"height",   location.height},
+                                      {"rotation", location.rotation}};
+            }
+
+
+            for(face::FaceInfo* faceInfo : *faceInfos){
+
+                face::Location* location  = faceInfo->get_location();
+                delete location;
+                location = NULL;
+
+                boost::container::stable_vector<face::Point*>* landmarks = faceInfo->get_landmarks();
+                for(face::Point* point : *landmarks){
+                    delete point;
+                    point = NULL;
+                }
+
+                delete landmarks;
+                landmarks = NULL;
+
+
+                boost::container::stable_vector<double>* descriptors = faceInfo->get_descriptors();
+                delete descriptors;
+                descriptors = NULL;
+
+                delete faceInfo;
+                faceInfo = NULL;
+            }
+
+            delete faceInfos;
+            faceInfos = NULL;
+
+        } catch (std::exception &e) {
+            std::cout << e.what() << std::endl;
         }
-
-
-
-        // do add ...
-
-
-        // builder response body
-
-        json result;
-
 
         res.add_header("Content-Type", "application/json");
         res.set_status_and_content(status_type::ok, result.dump());
-    });
+    }, log_t{});
 
 
     /**
@@ -563,59 +1009,151 @@ int main() {
      *
      * faceset update user
      */
-    server.set_http_handler<GET, POST>("/face/v1/faceset/user/update", [](request &req, response &res) {
+    server.set_http_handler<POST>("/face/v1/faceset/user/update", [](request &req, response &res) {
 
-        // process request body
+        json result = json::object();
 
-        std::string_view body = req.body();
-        json param = json::parse(body);
+        try {
+            // process request body
 
-        std::cout << "param:" << param << std::endl;
+            std::string_view body = req.body();
+            json param = json::parse(body);
 
-        std::string image = param["image"].get<std::string>();
-        std::string image_type = param["image_type"].get<std::string>();
-        std::string group_id = param["group_id"].get<std::string>();
-        std::string user_id = param["user_id"].get<std::string>();
-        std::string user_info = param["user_info"].get<std::string>();
-        std::string quality_control = param["quality_control"].get<std::string>();
-        std::string liveness_control = param["liveness_control"].get<std::string>();
-        std::string action_type = param["action_type"].get<std::string>();
+            std::cout << "param:" << param << std::endl;
 
-        // decode base64 string
-        if ("BASE64" == image_type) {
+            std::string image = param["image"].get<std::string>();
+            std::string image_type = param["image_type"].get<std::string>();
+            std::string group_id = param["group_id"].get<std::string>();
+            std::string user_id = param["user_id"].get<std::string>();
+            std::string user_info = param["user_info"].get<std::string>();
+            std::string quality_control = param["quality_control"].get<std::string>();
+            std::string liveness_control = param["liveness_control"].get<std::string>();
+            std::string action_type = param["action_type"].get<std::string>();
 
-            long t_start, t_end;
-            t_start = utils::timestamp();
+            std::string raw_image;
 
-            std::ostringstream sout;
-            std::istringstream sin;
+            // decode base64 string
+            if ("BASE64" == image_type) {
 
-            sin.str(image);
+                long t_start, t_end;
+                t_start = utils::timestamp();
 
-            // base64编码器对象
-            dlib::base64 base64_coder;
-            base64_coder.decode(sin, sout);
+                std::ostringstream* sout = new std::ostringstream();
+                std::istringstream* sin = new std::istringstream();
 
-            t_end = utils::timestamp();
-            std::cout << "decode base64 image in " << t_end - t_start << " ms" << std::endl;
+                (*sin).str(image);
 
-            std::cout << "base64 size:" << image.size() << std::endl;
-            image = sout.str();
-            std::cout << "decode size:" << image.size() << std::endl;
+                // base64编码器对象
+                dlib::base64 base64_coder;
+                base64_coder.decode(*sin, *sout);
 
-            sin.clear();
-            sout.clear();
+                t_end = utils::timestamp();
+                std::cout << "decode base64 image in " << t_end - t_start << " ms" << std::endl;
+
+                std::cout << "base64 size:" << image.size() << std::endl;
+                raw_image = (*sout).str();
+                std::cout << "decode size:" << raw_image.size() << std::endl;
+
+                (*sin).clear();
+                delete sin;
+                sin = NULL;
+
+                (*sout).clear();
+                delete sout;
+                sout = NULL;
+            }
+
+
+            // do add ...
+            std::string log_id = bsoncxx::oid().to_string();
+            dlib::matrix<dlib::rgb_pixel> img;
+            face::local_load_image(img, raw_image, log_id);
+
+            raw_image.clear();
+            std::string().swap(raw_image);
+
+            boost::container::stable_vector<face::FaceInfo*>* faceInfos = new boost::container::stable_vector<face::FaceInfo*>();
+            face::face_detect(faceInfos, img, 1);
+
+            dlib::matrix<dlib::rgb_pixel>().swap(img);
+
+            if ((*faceInfos).size() > 0) {
+
+                faceset::image::add(log_id, image);
+
+                face::FaceInfo faceInfo = *((*faceInfos)[0]);
+                std::string face_token = faceInfo.get_face_token();
+                face::Location location = *faceInfo.get_location();
+                boost::container::stable_vector<double> descriptors = *faceInfo.get_descriptors();
+
+                double* descriptors_arrar = new double[descriptors.size()];
+                for(int n = 0; n< descriptors.size(); n++){
+                    descriptors_arrar[n] = descriptors[n];
+                }
+
+
+                if (action_type == "UPDATE") {
+                    boost::container::stable_vector<std::string> rows = faceset::user::get(group_id, user_id);
+                    if (rows.size() > 0) {
+                        faceset::user::delete_one(group_id, user_id);
+                        faceset::user::upsert(group_id, user_id, user_info);
+                        faceset::face::add(group_id, user_id, log_id, face_token, descriptors_arrar);
+                    }
+                    rows.clear();
+                    boost::container::stable_vector<std::string>().swap(rows);
+
+                } else if (action_type == "REPLACE ") {
+
+                    faceset::user::delete_one(group_id, user_id);
+                    faceset::user::upsert(group_id, user_id, user_info);
+                    faceset::face::add(group_id, user_id, log_id, face_token, descriptors_arrar);
+
+                }
+
+
+                delete[] descriptors_arrar;
+                descriptors_arrar = NULL;
+
+
+                result["face_token"] = face_token;
+                result["location"] = {{"left",     location.left},
+                                      {"top",      location.top},
+                                      {"width",    location.width},
+                                      {"height",   location.height},
+                                      {"rotation", location.rotation}};
+            }
+
+
+            for(face::FaceInfo* faceInfo : *faceInfos){
+
+                face::Location* location  = faceInfo->get_location();
+                delete location;
+                location = NULL;
+
+                boost::container::stable_vector<face::Point*>* landmarks = faceInfo->get_landmarks();
+                for(face::Point* point : *landmarks){
+                    delete point;
+                    point = NULL;
+                }
+
+                delete landmarks;
+                landmarks = NULL;
+
+
+                boost::container::stable_vector<double>* descriptors = faceInfo->get_descriptors();
+                delete descriptors;
+                descriptors = NULL;
+
+                delete faceInfo;
+                faceInfo = NULL;
+            }
+
+            delete faceInfos;
+            faceInfos = NULL;
+
+        } catch (std::exception &e) {
+            std::cout << e.what() << std::endl;
         }
-
-
-
-        // do add ...
-
-
-        // builder response body
-
-        json result;
-
 
         res.add_header("Content-Type", "application/json");
         res.set_status_and_content(status_type::ok, result.dump());
@@ -627,25 +1165,37 @@ int main() {
      *
      * faceset get user
      */
-    server.set_http_handler<GET, POST>("/face/v1/faceset/user/get", [](request &req, response &res) {
+    server.set_http_handler<POST>("/face/v1/faceset/user/get", [](request &req, response &res) {
 
-        // process request body
+        json result = json::object();
 
-        std::string_view body = req.body();
-        json param = json::parse(body);
+        try {
+            // process request body
 
-        std::cout << "param:" << param << std::endl;
+            std::string_view body = req.body();
+            json param = json::parse(body);
 
-
-        std::string group_id = param["group_id"].get<std::string>();
-        std::string user_id = param["user_id"].get<std::string>();
-
+            std::cout << "param:" << param << std::endl;
 
 
-        // builder response body
+            std::string group_id = param["group_id"].get<std::string>();
+            std::string user_id = param["user_id"].get<std::string>();
 
-        json result;
 
+            boost::container::stable_vector<std::string> rows = faceset::user::get(group_id, user_id);
+
+            json user_list_json = json::array();
+            for (std::string row : rows) {
+                user_list_json.push_back(json::parse(row));
+            }
+
+            rows.clear();
+
+            result["user_list"] = user_list_json;
+
+        } catch (std::exception &e) {
+            std::cout << e.what() << std::endl;
+        }
 
         res.add_header("Content-Type", "application/json");
         res.set_status_and_content(status_type::ok, result.dump());
@@ -657,26 +1207,39 @@ int main() {
      *
      * faceset user copy
      */
-    server.set_http_handler<GET, POST>("/face/v1/faceset/user/copy", [](request &req, response &res) {
+    server.set_http_handler<POST>("/face/v1/faceset/user/copy", [](request &req, response &res) {
 
-        // process request body
+        json result = json::object();
 
-        std::string_view body = req.body();
-        json param = json::parse(body);
+        try {
+            // process request body
 
-        std::cout << "param:" << param << std::endl;
+            std::string_view body = req.body();
+            json param = json::parse(body);
 
-
-        std::string user_id = param["user_id"].get<std::string>();
-        std::string src_group_id = param["src_group_id"].get<std::string>();
-        std::string dst_group_id = param["dst_group_id"].get<std::string>();
+            std::cout << "param:" << param << std::endl;
 
 
+            std::string user_id = param["user_id"].get<std::string>();
+            std::string src_group_id = param["src_group_id"].get<std::string>();
+            std::string dst_group_id = param["dst_group_id"].get<std::string>();
 
-        // builder response body
 
-        json result;
+            faceset::user::copy(user_id, src_group_id, dst_group_id);
 
+
+            // builder response body
+
+            result["error_code"] = 0;
+            result["log_id"] = bsoncxx::oid().to_string();
+
+        } catch (std::exception &e) {
+            std::cout << e.what() << std::endl;
+
+            result["error_code"] = 1;
+            result["log_id"] = bsoncxx::oid().to_string();
+            result["error_msg"] = e.what();
+        }
 
         res.add_header("Content-Type", "application/json");
         res.set_status_and_content(status_type::ok, result.dump());
@@ -688,25 +1251,38 @@ int main() {
      *
      * faceset user delete
      */
-    server.set_http_handler<GET, POST>("/face/v1/faceset/user/delete", [](request &req, response &res) {
+    server.set_http_handler<POST>("/face/v1/faceset/user/delete", [](request &req, response &res) {
 
-        // process request body
+        json result = json::object();
 
-        std::string_view body = req.body();
-        json param = json::parse(body);
+        try {
+            // process request body
 
-        std::cout << "param:" << param << std::endl;
+            std::string_view body = req.body();
+            json param = json::parse(body);
+
+            std::cout << "param:" << param << std::endl;
+
+            std::string group_id = param["group_id"].get<std::string>();
+            std::string user_id = param["user_id"].get<std::string>();
 
 
-        std::string group_id = param["group_id"].get<std::string>();
-        std::string user_id = param["user_id"].get<std::string>();
+            faceset::user::delete_one(group_id, user_id);
 
 
+            // builder response body
 
-        // builder response body
+            result["error_code"] = 0;
+            result["log_id"] = bsoncxx::oid().to_string();
 
-        json result;
 
+        } catch (std::exception &e) {
+            std::cout << e.what() << std::endl;
+
+            result["error_code"] = 1;
+            result["log_id"] = bsoncxx::oid().to_string();
+            result["error_msg"] = e.what();
+        }
 
         res.add_header("Content-Type", "application/json");
         res.set_status_and_content(status_type::ok, result.dump());
@@ -718,24 +1294,36 @@ int main() {
      *
      * faceset face getlist
      */
-    server.set_http_handler<GET, POST>("/face/v1/faceset/face/getlist", [](request &req, response &res) {
+    server.set_http_handler<POST>("/face/v1/faceset/face/getlist", [](request &req, response &res) {
 
-        // process request body
+        json result = json::object();
 
-        std::string_view body = req.body();
-        json param = json::parse(body);
+        try {
+            // process request body
 
-        std::cout << "param:" << param << std::endl;
+            std::string_view body = req.body();
+            json param = json::parse(body);
 
-        std::string group_id = param["group_id"].get<std::string>();
-        std::string user_id = param["user_id"].get<std::string>();
+            std::cout << "param:" << param << std::endl;
+
+            std::string group_id = param["group_id"].get<std::string>();
+            std::string user_id = param["user_id"].get<std::string>();
 
 
-        json result;
-        result["error_code"] = 0;
-        result["error_msg"] = "SUCCESS";
-        result["log_id"] = std::rand();
+            boost::container::stable_vector<std::string> rows = faceset::face::getlist(group_id, user_id);
 
+            json face_list_json = json::array();
+            for (std::string row : rows) {
+                face_list_json.push_back(json::parse(row));
+            }
+
+            rows.clear();
+
+            result["face_list"] = face_list_json;
+
+        } catch (std::exception &e) {
+            std::cout << e.what() << std::endl;
+        }
 
         res.add_header("Content-Type", "application/json");
         res.set_status_and_content(status_type::ok, result.dump());
@@ -747,25 +1335,36 @@ int main() {
      *
      * faceset delete face
      */
-    server.set_http_handler<GET, POST>("/face/v1/faceset/face/delete", [](request &req, response &res) {
+    server.set_http_handler<POST>("/face/v1/faceset/face/delete", [](request &req, response &res) {
 
-        // process request body
+        json result = json::object();
 
-        std::string_view body = req.body();
-        json param = json::parse(body);
+        try {
+            // process request body
 
-        std::cout << "param:" << param << std::endl;
+            std::string_view body = req.body();
+            json param = json::parse(body);
 
-        std::string group_id = param["group_id"].get<std::string>();
-        std::string user_id = param["user_id"].get<std::string>();
-        std::string face_token = param["face_token"].get<std::string>();
+            std::cout << "param:" << param << std::endl;
+
+            std::string group_id = param["group_id"].get<std::string>();
+            std::string user_id = param["user_id"].get<std::string>();
+            std::string face_token = param["face_token"].get<std::string>();
 
 
-        json result;
-        result["error_code"] = 0;
-        result["error_msg"] = "SUCCESS";
-        result["log_id"] = std::rand();
+            faceset::face::delete_one(group_id, user_id, face_token);
 
+
+            result["error_code"] = 0;
+            result["log_id"] = bsoncxx::oid().to_string();
+
+        } catch (std::exception &e) {
+            std::cout << e.what() << std::endl;
+
+            result["error_code"] = 1;
+            result["log_id"] = bsoncxx::oid().to_string();
+            result["error_msg"] = e.what();
+        }
 
         res.add_header("Content-Type", "application/json");
         res.set_status_and_content(status_type::ok, result.dump());
@@ -778,14 +1377,26 @@ int main() {
      *  close server
      */
     server.set_http_handler<GET, POST>("/close", [&](request &req, response &res) {
+
         res.set_status_and_content(status_type::ok, "will close");
 
         server.stop();
     });
 
-
+    // face recognition ready
     face::init();
-    std::cout << "server inited ~" << std::endl;
+
+    // faceset manage ready
+    faceset::init();
+
+    // face search index ready
+    build_all_face_index();
+
+//    char name[1024];
+//    int rslt = readlink("/proc/self/exe", name, sizeof(name));
+//    name[rslt] = '\0';
+
+    std::cout << "server inited, startup with pid: " << getpid() << std::endl;
     std::cout << std::endl;
 
     // start server
