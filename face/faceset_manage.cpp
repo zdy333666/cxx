@@ -102,14 +102,14 @@ namespace faceset {
             bsoncxx::document::value filter = bsoncxx::builder::stream::document()
                     << "group_id" << group_id
                     << bsoncxx::builder::stream::finalize;
-            std::cout << "filter:" << bsoncxx::to_json(filter) << std::endl;
+//            std::cout << "filter:" << bsoncxx::to_json(filter) << std::endl;
 
             bsoncxx::document::value projection = bsoncxx::builder::stream::document()
                     << "_id" << 0
                     << "user_id" << 1
                     << "user_info" << 1
                     << bsoncxx::builder::stream::finalize;
-            std::cout << "projection:" << bsoncxx::to_json(projection) << std::endl;
+//            std::cout << "projection:" << bsoncxx::to_json(projection) << std::endl;
 
             mongocxx::options::find options = mongocxx::options::find().skip(start).limit(length).projection(
                     projection.view());
@@ -117,15 +117,13 @@ namespace faceset {
             mongocxx::collection coll = db["faceset_user"];
             mongocxx::cursor cursor = coll.find(filter.view(), options);
 
-            boost::container::stable_vector<bsoncxx::document::value> docs(cursor.begin(), cursor.end());
-
             boost::container::stable_vector<std::string> result;
 
-            for (bsoncxx::document::value doc : docs) {
+            for ( bsoncxx::document::view doc : cursor){
                 std::string doc_json = bsoncxx::to_json(doc);
                 result.push_back(doc_json);
 
-                std::cout << "doc:" << doc_json << std::endl;
+//                std::cout << "doc:" << doc_json << std::endl;
             }
 
             return result;
@@ -142,7 +140,7 @@ namespace faceset {
                     << "group_id" << group_id
                     << bsoncxx::builder::stream::finalize;
 
-            std::cout << "filter:" << bsoncxx::to_json(filter) << std::endl;
+//            std::cout << "filter:" << bsoncxx::to_json(filter) << std::endl;
 
             mongocxx::collection coll = db["faceset_face"];
             bsoncxx::stdx::optional<mongocxx::result::delete_result> result = coll.delete_many(filter.view());
@@ -177,13 +175,13 @@ namespace faceset {
                     << "user_info" << user_info
                     << "ctime" <<  bsoncxx::types::b_date(std::chrono::system_clock::now())
                     << bsoncxx::builder::stream::finalize;
-            std::cout << "doc:" << bsoncxx::to_json(doc) << std::endl;
+//            std::cout << "doc:" << bsoncxx::to_json(doc) << std::endl;
 
             mongocxx::collection coll = db["faceset_user"];
             bsoncxx::stdx::optional<mongocxx::result::insert_one> result = coll.insert_one(doc.view());
 
             std::string inserted_id = result.value().inserted_id().get_oid().value.to_string();
-            std::cout << "inserted_id:" << inserted_id << std::endl;
+            std::cout << "inserted id:" << inserted_id << std::endl;
 
             return inserted_id;
         }
@@ -201,15 +199,15 @@ namespace faceset {
                     << "group_id" << group_id
                     << "user_id" << user_id
                     << bsoncxx::builder::stream::finalize;
-            std::cout << "filter:" << bsoncxx::to_json(filter) << std::endl;
+//            std::cout << "filter:" << bsoncxx::to_json(filter) << std::endl;
 
             bsoncxx::document::value update =  bsoncxx::builder::stream::document()
                     << "$set" << bsoncxx::builder::stream::open_document
-                    << "user_info" << user_info
-                    << "ctime" <<  bsoncxx::types::b_date(std::chrono::system_clock::now())
+                        << "user_info" << user_info
+                        << "ctime" <<  bsoncxx::types::b_date(std::chrono::system_clock::now())
                     << bsoncxx::builder::stream::close_document
                     << bsoncxx::builder::stream::finalize;
-            std::cout << "update:" << bsoncxx::to_json(update) << std::endl;
+//            std::cout << "update:" << bsoncxx::to_json(update) << std::endl;
 
             mongocxx::options::update options;
             options.upsert(false);
@@ -218,7 +216,7 @@ namespace faceset {
             bsoncxx::stdx::optional<mongocxx::result::update> result = coll.update_one(filter.view(), update.view(), options);
 
             int upserted_count = result.value().result().upserted_count();
-            std::cout << "upserted_count:" << upserted_count << std::endl;
+            std::cout << "upserted count:" << upserted_count << std::endl;
 
             return upserted_count;
         }
@@ -240,10 +238,8 @@ namespace faceset {
 
             bsoncxx::document::value update =  bsoncxx::builder::stream::document()
                     << "$set" << bsoncxx::builder::stream::open_document
-//                    << "group_id" << group_id
-//                    << "user_id" << user_id
-                    << "user_info" << bsoncxx::from_json(user_info) //user_info
-                    << "ctime" <<  bsoncxx::types::b_date(std::chrono::system_clock::now())
+                        << "user_info" << bsoncxx::from_json(user_info)
+                        << "ctime" <<  bsoncxx::types::b_date(std::chrono::system_clock::now())
                     << bsoncxx::builder::stream::close_document
                     << bsoncxx::builder::stream::finalize;
 //            std::cout << "update:" << bsoncxx::to_json(update) << std::endl;
@@ -254,8 +250,8 @@ namespace faceset {
             mongocxx::collection coll = db["faceset_user"];
             bsoncxx::stdx::optional<mongocxx::result::update> result = coll.update_one(filter.view(), update.view(), options);
 
-            int upserted_count = result.value().modified_count();
-            std::cout << "faceset user upserted_count:" << upserted_count << std::endl;
+            int upserted_count = result.value().result().upserted_count();
+            std::cout << "faceset user upserted count:" << upserted_count << std::endl;
 
             return upserted_count;
         }
@@ -277,14 +273,14 @@ namespace faceset {
             bsoncxx::document::value filter = filter_builder
                     << "user_id" << user_id
                     << bsoncxx::builder::stream::finalize;
-            std::cout << "filter:" << bsoncxx::to_json(filter) << std::endl;
+//            std::cout << "filter:" << bsoncxx::to_json(filter) << std::endl;
 
             bsoncxx::document::value projection = bsoncxx::builder::stream::document()
                     << "_id" << 0
                     << "group_id" << 1
                     << "user_info" << 1
                     << bsoncxx::builder::stream::finalize;
-            std::cout << "projection:" << bsoncxx::to_json(projection) << std::endl;
+//            std::cout << "projection:" << bsoncxx::to_json(projection) << std::endl;
 
             mongocxx::options::find options;
             options.projection(projection.view());
@@ -292,15 +288,13 @@ namespace faceset {
             mongocxx::collection coll = db["faceset_user"];
             mongocxx::cursor cursor = coll.find(filter.view(), options);
 
-            boost::container::stable_vector<bsoncxx::document::value> docs(cursor.begin(), cursor.end());
-
             boost::container::stable_vector<std::string> result;
 
-            for (bsoncxx::document::value doc : docs) {
+            for ( bsoncxx::document::view doc : cursor){
                 std::string doc_json = bsoncxx::to_json(doc);
-                std::cout << "doc:" << doc_json << std::endl;
-
                 result.push_back(doc_json);
+
+//                std::cout << "doc:" << doc_json << std::endl;
             }
 
             return result;
@@ -351,10 +345,13 @@ namespace faceset {
          * @param user_id
          * @param image_id
          * @param face_token
-         * @param descriptor
+         * @param location_json
+         * @param landmark_jsons
+         * @param descriptors
          * @return
          */
-        std::string add(std::string &group_id, std::string &user_id, std::string &image_id, std::string &face_token, double *descriptors) {
+        std::string add(std::string &group_id, std::string &user_id, std::string &image_id, std::string &face_token, std::string &location_json
+                , boost::container::stable_vector<std::string>* landmark_jsons, boost::container::stable_vector<double>* descriptors) {
 
             auto builder = bsoncxx::builder::stream::document{};
             bsoncxx::document::value doc = builder
@@ -362,11 +359,18 @@ namespace faceset {
                     << "user_id" << user_id
                     << "image_id" << image_id
                     << "face_token" << face_token
+                    << "location" << bsoncxx::from_json(location_json)
+                    << "landmark" << bsoncxx::builder::stream::open_array
+                    << [&](bsoncxx::builder::stream::array_context<> arr) {
+                        for (std::string landmark_json : (*landmark_jsons)) {
+                            arr <<  bsoncxx::from_json(landmark_json);
+                        }
+                    }
+                    << bsoncxx::builder::stream::close_array
                     << "descriptor" << bsoncxx::builder::stream::open_array
                     << [&](bsoncxx::builder::stream::array_context<> arr) {
-                         int length = sizeof(descriptors)/ sizeof(double);
-                        for ( int i = 0; i < length; i++) {
-                            arr << descriptors[i];
+                        for (double descriptor : (*descriptors)) {
+                            arr << descriptor;
                         }
                     }
                     << bsoncxx::builder::stream::close_array
@@ -379,7 +383,7 @@ namespace faceset {
             bsoncxx::stdx::optional<mongocxx::result::insert_one> result = coll.insert_one(doc.view());
 
             std::string inserted_id = result.value().inserted_id().get_oid().value.to_string();
-            std::cout << "faceset face inserted_id:" << inserted_id << std::endl;
+            std::cout << "faceset face inserted id:" << inserted_id << std::endl;
 
             return inserted_id;
         }
@@ -412,25 +416,13 @@ namespace faceset {
             mongocxx::collection coll = db["faceset_face"];
             mongocxx::cursor cursor = coll.find(filter.view(), options);
 
-//            boost::container::stable_vector<bsoncxx::document::value> docs(cursor.begin(), cursor.end());
-
             boost::container::stable_vector<std::string> result;
 
-//            for ( bsoncxx::document::view doc : cursor){
-////                bsoncxx::document::view doc = *it;
-//                std::string doc_json = bsoncxx::to_json(doc);
-////                std::cout << "doc:" << doc_json << std::endl;
-//
-//                result.push_back(doc_json);
-//            }
-//
-
-            for ( mongocxx::cursor::iterator it = cursor.begin(); it != cursor.end(); it++){
-                    bsoncxx::document::view doc = *it;
+            for ( bsoncxx::document::view doc : cursor){
                 std::string doc_json = bsoncxx::to_json(doc);
-//                std::cout << "doc:" << doc_json << std::endl;
-
                 result.push_back(doc_json);
+
+//                std::cout << "doc:" << doc_json << std::endl;
             }
 
             return result;
@@ -469,15 +461,13 @@ namespace faceset {
             mongocxx::collection coll = db["faceset_face"];
             mongocxx::cursor cursor = coll.find(filter.view(), options);
 
-            boost::container::stable_vector<bsoncxx::document::value> docs(cursor.begin(), cursor.end());
-
             boost::container::stable_vector<std::string> result;
 
-            for (bsoncxx::document::value doc : docs) {
+            for ( bsoncxx::document::view doc : cursor){
                 std::string doc_json = bsoncxx::to_json(doc);
-//                std::cout << "doc:" << doc_json << std::endl;
-
                 result.push_back(doc_json);
+
+//                std::cout << "doc:" << doc_json << std::endl;
             }
 
             return result;
@@ -516,12 +506,13 @@ namespace faceset {
 
     namespace image {
 
-        std::string add(std::string& image_id, std::string& data_base64){
+        std::string add(std::string& image_id, std::string& data_base64, std::string& user_id){
 
             auto builder = bsoncxx::builder::stream::document{};
             bsoncxx::document::value doc = builder
                     << "image_id" << image_id
                     << "data_base64" << data_base64
+                    << "user_id" << user_id
                     << "ctime" <<  bsoncxx::types::b_date(std::chrono::system_clock::now())
                     << bsoncxx::builder::stream::finalize;
 //            std::cout << "document:" << bsoncxx::to_json(doc) << std::endl;
@@ -536,8 +527,12 @@ namespace faceset {
             return inserted_id;
         }
 
-
-        std::string get(std::string& image_id){
+        /**
+         *
+         * @param image_id
+         * @return
+         */
+        std::string get(std::string& image_id) {
 
             bsoncxx::document::value filter = bsoncxx::builder::stream::document()
                     << "image_id" << image_id
@@ -546,7 +541,6 @@ namespace faceset {
 
             bsoncxx::document::value projection = bsoncxx::builder::stream::document()
                     << "_id" << 0
-                    << "data_base64" << 1
                     << bsoncxx::builder::stream::finalize;
 //            std::cout << "projection:" << bsoncxx::to_json(projection) << std::endl;
 
@@ -559,7 +553,50 @@ namespace faceset {
 
             std::string result = bsoncxx::to_json(doc.value());
 
-           return result;
+            return result;
+        }
+
+        /**
+         *
+         * @param user_id
+         * @return
+         */
+        boost::container::stable_vector<std::string> getlist(std::string& user_id) {
+
+            bsoncxx::document::value filter = bsoncxx::builder::stream::document()
+                    << "user_id" << user_id
+                    << bsoncxx::builder::stream::finalize;
+            std::cout << "filter:" << bsoncxx::to_json(filter) << std::endl;
+
+            bsoncxx::document::value projection = bsoncxx::builder::stream::document()
+                    << "_id" << 0
+                    << bsoncxx::builder::stream::finalize;
+//            std::cout << "projection:" << bsoncxx::to_json(projection) << std::endl;
+
+
+            bsoncxx::document::value sort = bsoncxx::builder::stream::document()
+                    << "ctime" << 1
+                    << bsoncxx::builder::stream::finalize;
+//            std::cout << "sort:" << bsoncxx::to_json(sort) << std::endl;
+
+
+            mongocxx::options::find options;
+            options.projection(projection.view());
+            options.sort(sort.view());
+
+            mongocxx::collection coll = db["faceset_image"];
+            mongocxx::cursor cursor = coll.find(filter.view(), options);
+
+            boost::container::stable_vector<std::string> result;
+
+            for ( bsoncxx::document::view doc : cursor){
+                std::string doc_json = bsoncxx::to_json(doc);
+                result.push_back(doc_json);
+
+//                std::cout << "doc:" << doc_json << std::endl;
+            }
+
+            return result;
         }
 
     }

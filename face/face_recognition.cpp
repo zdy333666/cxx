@@ -219,26 +219,49 @@ namespace face {
                 features_array[k] = features[k];
             }
 
-            (*index).add_item(n, features_array);
+            index->add_item(n, features_array);
 
             delete[] features_array;
             features_array = NULL;
 
-//            features.clear();
-//            std::vector<double>().swap(features);
+            features.clear();
+            std::vector<double>().swap(features);
         }
-        (*index).build(4);
+
+        index->build(4);
+
+        AnnoyIndex<int, double, Euclidean, Kiss32Random>* old_index = (*group_index_map)[group_id];
+
+        if(old_index != NULL){
+
+            std::cout << "old_index:" << old_index << std::endl;
+
+            delete old_index;
+            old_index = NULL;
+        }
 
         (*group_index_map)[group_id] = move(index);
 
+        //---------------------------------------------------------------------------
 
         std::map<int, std::string>* index_user_map = new std::map<int, std::string>();
         for(int m = 0; m < user_ids.size(); m++){
             (*index_user_map)[m] = user_ids[m];
         }
 
+        std::map<int, std::string>* old_index_user_map = (*group_user_map)[group_id];
+
+        if(old_index_user_map != NULL){
+
+            std::cout << "old_index_user_map:" << old_index_user_map << std::endl;
+
+            delete old_index_user_map;
+            old_index_user_map = NULL;
+        }
+
         (*group_user_map)[group_id] = move(index_user_map);
     }
+
 
     /**
      *
@@ -354,7 +377,7 @@ std::vector<int>* local_ann_search( std::vector<int>* closest, const double *des
     // group_id link to face feature index
     AnnoyIndex<int, double, Euclidean, Kiss32Random>* index = (*group_index_map)[group_id];
 
-    if(index == nullptr){
+    if(index == NULL){
         return closest;
     }
 
@@ -363,7 +386,7 @@ std::vector<int>* local_ann_search( std::vector<int>* closest, const double *des
     int search_k = -1;
     std::vector<double>* distances = new std::vector<double>();
 
-    (*index).get_nns_by_vector(descriptor, result_n, search_k, closest, distances);
+    index->get_nns_by_vector(descriptor, result_n, search_k, closest, distances);
 
     for (int i = 0; i < closest->size(); i++) {
         int id = (*closest)[i];
@@ -380,19 +403,25 @@ std::vector<int>* local_ann_search( std::vector<int>* closest, const double *des
 
 
 /**
- * 
- * @param descriptor 
- * @param result_n 
- * @param group_id 
- * @return 
+ *
+ * @param userInfos
+ * @param descriptors
+ * @param result_n
+ * @param group_ids
+ * @return
  */
-boost::container::stable_vector<UserInfo*>* user_search(boost::container::stable_vector<UserInfo*>* userInfos, double *descriptor, int result_n, std::vector <string>* group_ids) {
+boost::container::stable_vector<UserInfo*>* user_search(boost::container::stable_vector<UserInfo*>* userInfos, boost::container::stable_vector<double>* descriptors, int result_n, std::vector <string>* group_ids) {
+
+    double* descriptors_array = new double[descriptors->size()];
+    for(int n = 0; n < descriptors->size(); n++){
+        descriptors_array[n] = (*descriptors)[n];
+    }
+
+    std::vector<int>* closest = new std::vector<int>();
 
     for(std::string group_id : (*group_ids)) {
 
-        std::vector<int>* closest = new std::vector<int>();
-
-        local_ann_search(closest, descriptor, result_n, group_id);
+        local_ann_search(closest, descriptors_array, result_n, group_id);
 
         for (int id : (*closest)) {
             UserInfo* userInfo = new UserInfo();
@@ -404,14 +433,18 @@ boost::container::stable_vector<UserInfo*>* user_search(boost::container::stable
         }
 
         result_n = result_n - closest->size();
-
-        delete closest;
-        closest = NULL;
+        closest->clear();
 
         if(result_n == 0){
             break;
         }
     }
+
+    delete closest;
+    closest = NULL;
+
+    delete[] descriptors_array;
+    descriptors_array = NULL;
 
     return userInfos;
 }
@@ -440,11 +473,16 @@ boost::container::stable_vector<FaceInfo*>* face_detect(boost::container::stable
         dlib::mmod_rect face = faces[i];
 
         double detection_confidence = face.detection_confidence;
-        cout << "face detection_confidence: " << detection_confidence << endl;
+        cout << "face " << i << " detection_confidence: " << detection_confidence << endl;
 
         //set face detection confidence thresholdv
         if (detection_confidence < 1.0) {
             continue;
+        }
+
+
+        if(extracted_faces->size() == max_face_num){
+            break;
         }
 
         auto shape = predictor(img, face.rect);
@@ -452,17 +490,18 @@ boost::container::stable_vector<FaceInfo*>* face_detect(boost::container::stable
         matrix<rgb_pixel> face_chip;
         extract_image_chip(img, get_face_chip_details(shape, 150, 0.25), face_chip);
 
-        (*extracted_faces).push_back(move(face_chip));
+        extracted_faces->push_back(move(face_chip));
         extracted_faces_index->push_back(i);
+
     }
 
     std::vector<matrix < float, 0, 1>> face_descriptors;
     local_get_descriptors(face_descriptors, *extracted_faces);
 
-    std::cout << "extracted_faces clear ..." << std::endl;
+//    std::cout << "extracted_faces clear ..." << std::endl;
     delete extracted_faces;
     extracted_faces = NULL;
-    std::cout << "extracted_faces cleared" << std::endl;
+//    std::cout << "extracted_faces cleared" << std::endl;
 
 
     for (int i = 0; i < face_descriptors.size(); i++) {
@@ -474,7 +513,7 @@ boost::container::stable_vector<FaceInfo*>* face_detect(boost::container::stable
         auto face_descriptor = face_descriptors[i];
 
         auto shape = predictor(img, face.rect);
-        std::cout << "shape rect:" << shape.get_rect() << std::endl;
+//        std::cout << "shape rect:" << shape.get_rect() << std::endl;
 //        std::cout << "shape size:" << shape.num_parts() << std::endl;
 
         std::string face_token = bsoncxx::oid().to_string();
@@ -484,50 +523,50 @@ boost::container::stable_vector<FaceInfo*>* face_detect(boost::container::stable
         boost::container::stable_vector<double>* descriptors = new boost::container::stable_vector<double>(face_descriptor.begin(), face_descriptor.end());
 
 
-        (*location).left = face.rect.left();
-        (*location).top = face.rect.top();
-        (*location).width = face.rect.width();
-        (*location).height = face.rect.height();
-        (*location).rotation = 0;
+        location->left = face.rect.left();
+        location->top = face.rect.top();
+        location->width = face.rect.width();
+        location->height = face.rect.height();
+        location->rotation = 0;
 
 
-        std::cout << "shape num_parts:" << shape.num_parts() << std::endl;
+//        std::cout << "shape num_parts:" << shape.num_parts() << std::endl;
 
         for (int idx = 0; idx < shape.num_parts(); idx++) {
             auto part = shape.part(idx);
 
             Point* point = new Point();
-            (*point).x = part.x();
-            (*point).y = part.y();
+            point->x = part.x();
+            point->y = part.y();
 
-            (*landmarks).push_back(point);
+            landmarks->push_back(point);
         }
 
-        std::cout << "create faceInfo " << i << std::endl;
+//        std::cout << "create faceInfo " << i << std::endl;
 
         FaceInfo* faceInfo = new FaceInfo();
-        (*faceInfo).set_face_token(face_token);
-        (*faceInfo).set_face_probability(face_probability);
-        (*faceInfo).set_location(location);
-        (*faceInfo).set_landmarks(landmarks);
-        (*faceInfo).set_descriptors(descriptors);
+        faceInfo->set_face_token(face_token);
+        faceInfo->set_face_probability(face_probability);
+        faceInfo->set_location(location);
+        faceInfo->set_landmarks(landmarks);
+        faceInfo->set_descriptors(descriptors);
 
-        std::cout << "push faceInfo " << i << std::endl;
+//        std::cout << "push faceInfo " << i << std::endl;
 
         faceInfos->push_back(faceInfo);
 
-        std::cout << "pushed faceInfo " << i << std::endl;
+//        std::cout << "pushed faceInfo " << i << std::endl;
     }
 
-    std::cout << "face_descriptors clear ..." << std::endl;
+//    std::cout << "face_descriptors clear ..." << std::endl;
     face_descriptors.clear();
     std::vector<matrix<float, 0, 1>>().swap(face_descriptors);
-    std::cout << "face_descriptors cleared" << std::endl;
+//    std::cout << "face_descriptors cleared" << std::endl;
 
-    std::cout << "extracted_faces_index clear ..." << std::endl;
+//    std::cout << "extracted_faces_index clear ..." << std::endl;
     delete extracted_faces_index;
     extracted_faces_index = NULL;
-    std::cout << "extracted_faces_index cleared" << std::endl;
+//    std::cout << "extracted_faces_index cleared" << std::endl;
 
     return faceInfos;
 
