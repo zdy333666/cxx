@@ -1,0 +1,4 @@
+face/cmake-build-debug/
+face/cmake-build-release/
+face/data/*
+face/.idea/
