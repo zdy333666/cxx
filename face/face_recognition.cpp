@@ -9,7 +9,6 @@
 #include <dlib/image_io.h>
 
 #include <bsoncxx/oid.hpp>
-#include "nlohmann_json.hpp"
 #include "utils.cpp"
 
 #include "kissrandom.h"
@@ -384,19 +383,16 @@ std::vector<int>* local_ann_search( std::vector<int>* closest, const double *des
 
     // search face from annoy index tree
     int search_k = -1;
-    std::vector<double>* distances = new std::vector<double>();
+    std::vector<double> distances = std::vector<double>();
 
-    index->get_nns_by_vector(descriptor, result_n, search_k, closest, distances);
+    index->get_nns_by_vector(descriptor, result_n, search_k, closest, &distances);
 
     for (int i = 0; i < closest->size(); i++) {
         int id = (*closest)[i];
-        double distance = (*distances)[i];
+        double distance = distances[i];
 
         std::cout << "search result -- id:" << id << "  distance:" << distance << std::endl;
     }
-
-    delete distances;
-    distances = NULL;
 
     return closest;
 }
@@ -412,18 +408,19 @@ std::vector<int>* local_ann_search( std::vector<int>* closest, const double *des
  */
 boost::container::stable_vector<UserInfo*>* user_search(boost::container::stable_vector<UserInfo*>* userInfos, boost::container::stable_vector<double>* descriptors, int result_n, std::vector <string>* group_ids) {
 
-    double* descriptors_array = new double[descriptors->size()];
+    double descriptors_array[descriptors->size()];
+
     for(int n = 0; n < descriptors->size(); n++){
         descriptors_array[n] = (*descriptors)[n];
     }
 
-    std::vector<int>* closest = new std::vector<int>();
+    std::vector<int> closest = std::vector<int>();
 
     for(std::string group_id : (*group_ids)) {
 
-        local_ann_search(closest, descriptors_array, result_n, group_id);
+        local_ann_search(&closest, descriptors_array, result_n, group_id);
 
-        for (int id : (*closest)) {
+        for (int id : closest) {
             UserInfo* userInfo = new UserInfo();
             userInfo->group_id = group_id;
             userInfo->user_id = (*(*group_user_map)[group_id])[id];
@@ -432,19 +429,13 @@ boost::container::stable_vector<UserInfo*>* user_search(boost::container::stable
             userInfos->push_back(userInfo);
         }
 
-        result_n = result_n - closest->size();
-        closest->clear();
+        result_n = result_n - closest.size();
+        closest.clear();
 
         if(result_n == 0){
             break;
         }
     }
-
-    delete closest;
-    closest = NULL;
-
-    delete[] descriptors_array;
-    descriptors_array = NULL;
 
     return userInfos;
 }
@@ -455,7 +446,7 @@ boost::container::stable_vector<UserInfo*>* user_search(boost::container::stable
 * @param img_str
 * @return
 */
-boost::container::stable_vector<FaceInfo*>* face_detect(boost::container::stable_vector<FaceInfo*>* faceInfos, const dlib::matrix<dlib::rgb_pixel> &img, int max_face_num) try {
+boost::container::stable_vector<FaceInfo*>* face_detect(boost::container::stable_vector<FaceInfo*>* faceInfos, const dlib::matrix<dlib::rgb_pixel> &img, int max_face_num) {
 
     std::vector<dlib::mmod_rect> faces;
     local_get_faces(faces, img);
@@ -463,8 +454,8 @@ boost::container::stable_vector<FaceInfo*>* face_detect(boost::container::stable
     // Run the face detector on the image of our action heroes, and for each face extract a
     // copy that has been normalized to 150x150 pixels in size and appropriately rotated
     // and centered.
-    boost::container::stable_vector<matrix<rgb_pixel>>* extracted_faces = new boost::container::stable_vector<matrix<rgb_pixel>>();
-    boost::container::stable_vector<int>* extracted_faces_index = new boost::container::stable_vector<int>();
+    boost::container::stable_vector<matrix<rgb_pixel>> *extracted_faces = new boost::container::stable_vector<matrix<rgb_pixel>>();
+    boost::container::stable_vector<int> *extracted_faces_index = new boost::container::stable_vector<int>();
 
     cout << "faces.size: " << faces.size() << endl;
 
@@ -476,12 +467,12 @@ boost::container::stable_vector<FaceInfo*>* face_detect(boost::container::stable
         cout << "face " << i << " detection_confidence: " << detection_confidence << endl;
 
         //set face detection confidence thresholdv
-        if (detection_confidence < 1.0) {
+        if (detection_confidence < 0.95) {
             continue;
         }
 
 
-        if(extracted_faces->size() == max_face_num){
+        if (extracted_faces->size() == max_face_num) {
             break;
         }
 
@@ -495,7 +486,7 @@ boost::container::stable_vector<FaceInfo*>* face_detect(boost::container::stable
 
     }
 
-    std::vector<matrix < float, 0, 1>> face_descriptors;
+    std::vector<matrix<float, 0, 1>> face_descriptors;
     local_get_descriptors(face_descriptors, *extracted_faces);
 
 //    std::cout << "extracted_faces clear ..." << std::endl;
@@ -518,9 +509,10 @@ boost::container::stable_vector<FaceInfo*>* face_detect(boost::container::stable
 
         std::string face_token = bsoncxx::oid().to_string();
         double face_probability = face.detection_confidence;
-        Location* location = new Location();
-        boost::container::stable_vector<Point*>* landmarks = new boost::container::stable_vector<Point*>();
-        boost::container::stable_vector<double>* descriptors = new boost::container::stable_vector<double>(face_descriptor.begin(), face_descriptor.end());
+        Location *location = new Location();
+        boost::container::stable_vector<Point *> *landmarks = new boost::container::stable_vector<Point *>();
+        boost::container::stable_vector<double> *descriptors = new boost::container::stable_vector<double>(
+                face_descriptor.begin(), face_descriptor.end());
 
 
         location->left = face.rect.left();
@@ -535,7 +527,7 @@ boost::container::stable_vector<FaceInfo*>* face_detect(boost::container::stable
         for (int idx = 0; idx < shape.num_parts(); idx++) {
             auto part = shape.part(idx);
 
-            Point* point = new Point();
+            Point *point = new Point();
             point->x = part.x();
             point->y = part.y();
 
@@ -544,7 +536,7 @@ boost::container::stable_vector<FaceInfo*>* face_detect(boost::container::stable
 
 //        std::cout << "create faceInfo " << i << std::endl;
 
-        FaceInfo* faceInfo = new FaceInfo();
+        FaceInfo *faceInfo = new FaceInfo();
         faceInfo->set_face_token(face_token);
         faceInfo->set_face_probability(face_probability);
         faceInfo->set_location(location);
@@ -569,10 +561,6 @@ boost::container::stable_vector<FaceInfo*>* face_detect(boost::container::stable
 //    std::cout << "extracted_faces_index cleared" << std::endl;
 
     return faceInfos;
-
-} catch (std::exception &e) {
-    std::cout << e.what() << std::endl;
 }
-
 
 }

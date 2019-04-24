@@ -17,7 +17,7 @@
 #include <mongocxx/uri.hpp>
 #include <bsoncxx/array/value.hpp>
 
-#include "nlohmann_json.hpp"
+#include "../json.hpp"
 
 
 using json = nlohmann::json;
@@ -34,7 +34,7 @@ mongocxx::client client;
 mongocxx::database db;
 
 
-auto insert() {
+void insert() {
 
     mongocxx::collection coll = db["test"];
 

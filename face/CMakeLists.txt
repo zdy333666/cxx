@@ -1,60 +1,30 @@
-#OS: Ubuntu 18.04
-
-#install mongoc-driver:
-#{
-#wget https://github.com/mongodb/mongo-c-driver/releases/download/1.14.0/mongo-c-driver-1.14.0.tar.gz
-#tar zxf mongo-c-driver-1.14.0.tar.gz
-#cd mongo-c-driver-1.14.0/
-#mkdir cmake-build
-#cd cmake-build
-#cmake -DENABLE_AUTOMATIC_INIT_AND_CLEANUP=OFF -DCMAKE_BUILD_TYPE=Release ..
-#sudo make
-#sudo make install
-#}
-#
-#
-#install mongocxx-driver:
-#{
-#wget https://github.com/mongodb/mongo-cxx-driver/archive/r3.4.0.tar.gz
-#tar zxf mongo-cxx-driver-r3.4.0.tar.gz
-#cd mongo-cxx-driver-r3.4.0/
-#mkdir cmake-build
-#cd cmake-build
-#cmake -DCMAKE_BUILD_TYPE=Release -DCMAKE_INSTALL_PREFIX=/usr/local ..
-#sudo make
-#sudo make install
-
-#ln -s /usr/local/lib/libmongocxx.so /usr/lib/libmongocxx.so
-
-#}
-
-
-#https://github.com/qicosmos/cinatra
-
-
 cmake_minimum_required(VERSION 3.13)
 project(face)
 
 set(CMAKE_CXX_STANDARD 17)
-
+#set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -DUSE_AVX_INSTRUCTIONS=1") # -std=c++11 -g -Wall -Wno-unused-variable -pthread
 #set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -fsanitize=leak -fno-omit-frame-pointer -Ofast")
 
 
 # add Boost dependences
 find_package(Boost REQUIRED COMPONENTS system filesystem)
-
-include_directories(face ${Boost_INCLUDE_DIRS})
+include_directories(${Boost_INCLUDE_DIRS})
 link_directories(face ${Boost_LIBRARY_DIRS})
 
 # add cinatra dependences
-include_directories("/usr/local/include/cinatra/cinatra")
+include_directories("/usr/local/include/cinatra/")
 
 #add annoy dependences
-include_directories("/home/zdy/git-local/annoy/src")
+include_directories("/usr/local/include/annoy/")
+
+# Tell cmake we will need dlib.  This command will pull in dlib and compile it
+# into your project.  Note that you don't need to compile or install dlib.  All
+# cmake needs is the dlib source code folder and it will take care of everything.
+
+#add_subdirectory(/usr/local/include/dlib dlib_build)
+
 
 # add mongo dependences
-#include_directories("/usr/local/include/libbson-1.0")
-#include_directories("/usr/local/include/libmongoc-1.0")
 include_directories("/usr/local/include/bsoncxx/v_noabi")
 include_directories("/usr/local/include/mongocxx/v_noabi")
 
@@ -62,14 +32,14 @@ include_directories("/usr/local/include/mongocxx/v_noabi")
 include_directories("/usr/include/hdf5/serial")
 
 # add other dependences
-link_directories("/usr/local/lib" "/usr/lib/x86_64-linux-gnu/hdf5/serial")
+link_directories("/usr/lib/x86_64-linux-gnu/hdf5/serial")
 
 # use std::experimental::filesystem
 link_libraries(stdc++fs)
 
 
 add_executable(face main.cpp)
-target_link_libraries(face ${Boost_LIBRARIES} uuid dlib X11 jpeg png gif blas cblas lapack pthread bsoncxx mongocxx)
+target_link_libraries(face ${Boost_LIBRARIES} uuid openblas dlib jpeg png gif X11 pthread bsoncxx mongocxx)
 
 
 

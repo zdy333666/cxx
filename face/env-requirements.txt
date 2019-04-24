@@ -1,0 +1,110 @@
+OS: Ubuntu 18.04 TLS
+
+
+安装g++编译器，可以通过命令“sudo apt-get install build-essential”实现。 执行完后，就完成了gcc,g++,make的安装。
+注：“sudo apt-get install build-essential --fix-missing”，这个命令是修补安装build-essential，即已安装了部分build-essential，但没有安装完全，此时可以使用该命令继续安装build-essential。
+通过“gcc -v, “g++ -v”可以查看g++是否安装成功。
+
+
+安装 cinatra
+git clone https://github.com/qicosmos/cinatra
+
+安装 annoy
+git clone https://github.com/spotify/annoy.git
+
+
+
+{
+sudo apt install libopenblas-dev
+}
+or
+{
+
+安装 cblas, lapack, lapacke
+
+确保机器上安装了gfortran编译器，如果没有安装的话，可以使用sudo apt-get install gfortran
+通过命令“gfortran -v”，可以查看gfortran是否安装成功。
+
+编译blas
+wget http://www.netlib.org/blas/blas-3.8.0.tgz
+tar zxf blas-3.8.0.tgz
+cd BLAS-3.8.0
+gfortran -c  -O3 *.f
+ar rv libblas.a *.o
+su cp libblas.a /usr/local/lib
+
+编译blas
+wget http://www.netlib.org/blas/blast-forum/cblas.tgz
+tar zxf cblas.tgz
+cd CBLAS
+cp ../BLAS-3.8.0/libblas.a  testing
+make
+sudo cp lib/cblas_LINUX.a /usr/local/lib/libcblas.a
+
+编译 lapack以及lapacke
+wget http://www.netlib.org/lapack/lapack-3.8.0.tar.gz
+tar zxf lapack-3.8.0.tar.gz
+cd cd lapack-3.8.0
+cp INSTALL/make.inc.gfortran make.inc
+ulimit -s unlimited
+make
+sudo cp LAPACKE/include/*.h /usr/local/include/lapacke
+sudo cp *.a /usr/local/lib
+
+/**
+After attending to a HPC lecture and doing some research I had the answer.
+It looks like the kernel associates a certain amount of memory to the compilation processes. This feature helps in some cases, when bugs can arise and those start to allocate unnecessarily big amounts of memory. But sometimes, the compilation requires more memory than usual and start getting errors.
+Then, by using the following command, it sets an unlimited amount of memory to the compilation.
+ulimit -s unlimited
+*/
+
+}
+
+
+安装 dlib
+wget http://dlib.net/files/dlib-19.17.tar.bz2
+tar zxf dlib-19.17.tar.bz2
+cd dlib-19.17
+cmake .. -DDLIB_USE_CUDA=0 -DUSE_AVX_INSTRUCTIONS=1
+cmake --build .
+sudo make install
+
+
+sudo apt install libsasl2-dev
+sudo apt install libsnappy-dev
+
+install mongoc-driver:
+{
+wget https://github.com/mongodb/mongo-c-driver/releases/download/1.14.0/mongo-c-driver-1.14.0.tar.gz
+tar zxf mongo-c-driver-1.14.0.tar.gz
+cd mongo-c-driver-1.14.0/
+mkdir cmake-build
+cd cmake-build
+cmake -DENABLE_AUTOMATIC_INIT_AND_CLEANUP=OFF -DCMAKE_BUILD_TYPE=Release ..
+sudo make
+sudo make install
+}
+
+
+install mongocxx-driver:
+{
+wget https://github.com/mongodb/mongo-cxx-driver/archive/r3.4.0.tar.gz
+tar zxf mongo-cxx-driver-r3.4.0.tar.gz
+cd mongo-cxx-driver-r3.4.0/
+mkdir cmake-build
+cd cmake-build
+cmake -DCMAKE_BUILD_TYPE=Release -DCMAKE_INSTALL_PREFIX=/usr/local ..
+sudo make
+sudo make install
+
+// ln -s /usr/local/lib/libmongocxx.so /usr/lib/libmongocxx.so
+
+}
+
+
+sudo apt install liblz4-dev
+sudo apt install libpcl-dev
+
+wget http://dlib.net/files/mmod_human_face_detector.dat.bz2
+wget http://dlib.net/files/dlib_face_recognition_resnet_model_v1.dat.bz2
+wget http://dlib.net/files/shape_predictor_68_face_landmarks.dat.bz2

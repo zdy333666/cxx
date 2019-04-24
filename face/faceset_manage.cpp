@@ -13,15 +13,14 @@
 namespace faceset {
 
     mongocxx::instance instance{}; // This should be done only once.
-    mongocxx::uri uri("mongodb://192.168.8.179:27017");
     mongocxx::client client;
     mongocxx::database db;
 
     /**
      *
      */
-    void init() {
-
+    void init(const std::string& uri_str) {
+        mongocxx::uri uri(uri_str);
         client = mongocxx::client(uri);
         db = client["face"];
     }

@@ -61,8 +61,7 @@ int main(int argc, char **argv) {
         flann::KDTreeIndex<flann::L2<float> > index (dataset, params);
 
 
-        std::cout << "index size:" << index.size() << std::endl;
-        std::cout << "index veclen:" << index.veclen() << std::endl << std::endl;
+        std::cout << "index size:" << index.size() << std::endl;        std::cout << "index veclen:" << index.veclen() << std::endl << std::endl;
 
 
         flann::Matrix<float> point(new float[1 * cols], 1, cols);

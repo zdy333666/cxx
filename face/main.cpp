@@ -6,8 +6,8 @@
  *
  */
 
-#include "http_server.hpp"
-#include "nlohmann_json.hpp"
+#include "cinatra.hpp"
+#include "json.hpp"
 
 #include <bsoncxx/oid.hpp>
 #include <dlib/base64.h>
@@ -129,7 +129,7 @@ int main() {
 
 
     /**
-     *
+     * ROOT path
      */
     server.set_http_handler<GET, POST>("/", [](request &req, response &res) {
 
@@ -143,9 +143,9 @@ int main() {
 
 
     /**
-     * rebuild-index
+     * rebuild index
      */
-    server.set_http_handler<POST>("/face/v1/rebuild", [](request &req, response &res) {
+    server.set_http_handler<POST>("/face/v1/rebuildIndex", [](request &req, response &res) {
 
         int index_count = build_all_face_index();
 
@@ -157,6 +157,40 @@ int main() {
 
     }, log_t{});
 
+
+    /**
+     * rebuild group index
+     */
+    server.set_http_handler<POST>("/face/v1/rebuildGroupIndex", [](request &req, response &res) {
+
+        json result = json::object();
+
+        try {
+            // process request body
+
+            std::string_view body = req.body();
+            json param = json::parse(body);
+
+//        std::cout << "param:" << param << std::endl;
+
+            std::string group_id = param["group_id"].get<std::string>();
+
+            build_group_face_index(group_id);
+
+            result["error_code"] = 0;
+            result["error_msg"] = "SUCCESS";
+
+        } catch (std::exception &e) {
+            std::cout << e.what() << std::endl;
+
+            result["error_code"] = 1;
+            result["error_msg"] = e.what();
+        }
+
+        res.add_header("Content-Type", "application/json");
+        res.set_status_and_content(status_type::ok, result.dump());
+
+    }, log_t{});
 
 
     /**
@@ -188,8 +222,8 @@ int main() {
                 long t_start, t_end;
                 t_start = utils::timestamp();
 
-                std::ostringstream* sout = new std::ostringstream();
-                std::istringstream* sin = new std::istringstream();
+                std::ostringstream *sout = new std::ostringstream();
+                std::istringstream *sin = new std::istringstream();
 
                 sin->str(image);
 
@@ -222,7 +256,7 @@ int main() {
             std::string().swap(raw_image);
 
             // do detect ...
-            boost::container::stable_vector<face::FaceInfo*>* faceInfos = new boost::container::stable_vector<face::FaceInfo*>();
+            boost::container::stable_vector<face::FaceInfo *> *faceInfos = new boost::container::stable_vector<face::FaceInfo *>();
             face::face_detect(faceInfos, img, max_face_num);
 
             dlib::matrix<dlib::rgb_pixel>().swap(img);
@@ -236,16 +270,16 @@ int main() {
 
             json face_list_json = json::array();
 
-            for (face::FaceInfo* faceInfo : *faceInfos) {
+            for (face::FaceInfo *faceInfo : *faceInfos) {
 
                 std::string face_token = faceInfo->get_face_token();
                 double face_probability = faceInfo->get_face_probability();
                 std::string label = faceInfo->get_label();
-                face::Location* location = faceInfo->get_location();
-                boost::container::stable_vector<face::Point*>* landmarks = faceInfo->get_landmarks();
+                face::Location *location = faceInfo->get_location();
+                boost::container::stable_vector<face::Point *> *landmarks = faceInfo->get_landmarks();
 
                 json landmark_json = json::array();
-                for (face::Point* landmark : *landmarks) {
+                for (face::Point *landmark : *landmarks) {
 
                     json point_json = {{"x", landmark->x},
                                        {"y", landmark->y}};
@@ -270,14 +304,14 @@ int main() {
             int face_num = faceInfos->size();
 
 
-            for(face::FaceInfo* faceInfo : *faceInfos){
+            for (face::FaceInfo *faceInfo : *faceInfos) {
 
-                face::Location* location  = faceInfo->get_location();
+                face::Location *location = faceInfo->get_location();
                 delete location;
                 location = NULL;
 
-                boost::container::stable_vector<face::Point*>* landmarks = faceInfo->get_landmarks();
-                for(face::Point* point : *landmarks){
+                boost::container::stable_vector<face::Point *> *landmarks = faceInfo->get_landmarks();
+                for (face::Point *point : *landmarks) {
                     delete point;
                     point = NULL;
                 }
@@ -286,7 +320,7 @@ int main() {
                 landmarks = NULL;
 
 
-                boost::container::stable_vector<double>* descriptors = faceInfo->get_descriptors();
+                boost::container::stable_vector<double> *descriptors = faceInfo->get_descriptors();
                 delete descriptors;
                 descriptors = NULL;
 
@@ -352,8 +386,8 @@ int main() {
                 long t_start, t_end;
                 t_start = utils::timestamp();
 
-                std::ostringstream* sout = new std::ostringstream();
-                std::istringstream* sin = new std::istringstream();
+                std::ostringstream *sout = new std::ostringstream();
+                std::istringstream *sin = new std::istringstream();
 
                 sin->str(image);
 
@@ -387,7 +421,7 @@ int main() {
 
             // do search ...
 
-            boost::container::stable_vector<face::FaceInfo*>* faceInfos = new boost::container::stable_vector<face::FaceInfo*>();
+            boost::container::stable_vector<face::FaceInfo *> *faceInfos = new boost::container::stable_vector<face::FaceInfo *>();
             face::face_detect(faceInfos, img, 1);
 
             dlib::matrix<dlib::rgb_pixel>().swap(img);
@@ -397,31 +431,32 @@ int main() {
 
 //                faceset::image::add(log_id, image);
 
-                face::FaceInfo* faceInfo = (*faceInfos)[0];
+                face::FaceInfo *faceInfo = (*faceInfos)[0];
 
                 std::string face_token = faceInfo->get_face_token();
-                boost::container::stable_vector<double>* descriptors = faceInfo->get_descriptors();
+                boost::container::stable_vector<double> *descriptors = faceInfo->get_descriptors();
 
-                std::vector <string> group_ids = dlib::split(group_id_list, ",");
-                for(std::string group_id : group_ids){
+                std::vector<string> group_ids = dlib::split(group_id_list, ",");
+                for (std::string group_id : group_ids) {
                     std::cout << "group_id:" << group_id << std::endl;
                 }
 
 
-                boost::container::stable_vector<face::UserInfo*>* userInfos = new boost::container::stable_vector<face::UserInfo*>();
+                boost::container::stable_vector<face::UserInfo *> *userInfos = new boost::container::stable_vector<face::UserInfo *>();
                 face::user_search(userInfos, descriptors, max_user_num, &group_ids);
 
 
                 group_ids.clear();
-                std::vector <string>().swap(group_ids);
+                std::vector<string>().swap(group_ids);
 
 
                 json user_list_json = json::array();
-                for (face::UserInfo* userInfo : *userInfos) {
+                for (face::UserInfo *userInfo : *userInfos) {
 
                     json user_info_json = json::object();
 
-                    boost::container::stable_vector<std::string> user_list = faceset::user::get(userInfo->group_id, userInfo->user_id);
+                    boost::container::stable_vector<std::string> user_list = faceset::user::get(userInfo->group_id,
+                                                                                                userInfo->user_id);
                     if (user_list.size() > 0) {
                         json user_json = json::parse(user_list[0]);
                         user_info_json = user_json["user_info"];
@@ -450,14 +485,14 @@ int main() {
             }
 
 
-            for(face::FaceInfo* faceInfo : *faceInfos){
+            for (face::FaceInfo *faceInfo : *faceInfos) {
 
-                face::Location* location  = faceInfo->get_location();
+                face::Location *location = faceInfo->get_location();
                 delete location;
                 location = NULL;
 
-                boost::container::stable_vector<face::Point*>* landmarks = faceInfo->get_landmarks();
-                for(face::Point* point : *landmarks){
+                boost::container::stable_vector<face::Point *> *landmarks = faceInfo->get_landmarks();
+                for (face::Point *point : *landmarks) {
                     delete point;
                     point = NULL;
                 }
@@ -466,7 +501,7 @@ int main() {
                 landmarks = NULL;
 
 
-                boost::container::stable_vector<double>* descriptors = faceInfo->get_descriptors();
+                boost::container::stable_vector<double> *descriptors = faceInfo->get_descriptors();
                 delete descriptors;
                 descriptors = NULL;
 
@@ -517,8 +552,8 @@ int main() {
                 long t_start, t_end;
                 t_start = utils::timestamp();
 
-                std::ostringstream* sout = new std::ostringstream();
-                std::istringstream* sin = new std::istringstream();
+                std::ostringstream *sout = new std::ostringstream();
+                std::istringstream *sin = new std::istringstream();
 
                 sin->str(image);
 
@@ -552,7 +587,7 @@ int main() {
 
             // do search ...
 
-            boost::container::stable_vector<face::FaceInfo*>* faceInfos = new boost::container::stable_vector<face::FaceInfo*>();
+            boost::container::stable_vector<face::FaceInfo *> *faceInfos = new boost::container::stable_vector<face::FaceInfo *>();
             face::face_detect(faceInfos, img, max_face_num);
 
             dlib::matrix<dlib::rgb_pixel>().swap(img);
@@ -563,19 +598,19 @@ int main() {
 
             json face_list = json::array();
 
-            for (face::FaceInfo* faceInfo : *faceInfos) {
+            for (face::FaceInfo *faceInfo : *faceInfos) {
 
                 std::string face_token = faceInfo->get_face_token();
-                face::Location* location = faceInfo->get_location();
-                boost::container::stable_vector<double>* descriptors = faceInfo->get_descriptors();
+                face::Location *location = faceInfo->get_location();
+                boost::container::stable_vector<double> *descriptors = faceInfo->get_descriptors();
 
-                std::vector <string> group_ids = dlib::split(group_id_list, ",");
-                for(std::string group_id : group_ids){
+                std::vector<string> group_ids = dlib::split(group_id_list, ",");
+                for (std::string group_id : group_ids) {
                     std::cout << "group_id:" << group_id << std::endl;
                 }
 
 
-                boost::container::stable_vector<face::UserInfo*>* userInfos = new boost::container::stable_vector<face::UserInfo*>();
+                boost::container::stable_vector<face::UserInfo *> *userInfos = new boost::container::stable_vector<face::UserInfo *>();
                 face::user_search(userInfos, descriptors, max_user_num, &group_ids);
 
 
@@ -584,11 +619,12 @@ int main() {
 
 
                 json user_list_json = json::array();
-                for (face::UserInfo* userInfo : *userInfos) {
+                for (face::UserInfo *userInfo : *userInfos) {
 
                     json user_info_json = json::object();
 
-                    boost::container::stable_vector<std::string> user_list = faceset::user::get(userInfo->group_id, userInfo->user_id);
+                    boost::container::stable_vector<std::string> user_list = faceset::user::get(userInfo->group_id,
+                                                                                                userInfo->user_id);
                     if (user_list.size() > 0) {
                         json user_json = json::parse(user_list[0]);
                         user_info_json = user_json["user_info"];
@@ -628,14 +664,14 @@ int main() {
             int face_num = (*faceInfos).size();
 
 
-            for(face::FaceInfo* faceInfo : *faceInfos){
+            for (face::FaceInfo *faceInfo : *faceInfos) {
 
-                face::Location* location  = faceInfo->get_location();
+                face::Location *location = faceInfo->get_location();
                 delete location;
                 location = NULL;
 
-                boost::container::stable_vector<face::Point*>* landmarks = faceInfo->get_landmarks();
-                for(face::Point* point : *landmarks){
+                boost::container::stable_vector<face::Point *> *landmarks = faceInfo->get_landmarks();
+                for (face::Point *point : *landmarks) {
                     delete point;
                     point = NULL;
                 }
@@ -644,7 +680,7 @@ int main() {
                 landmarks = NULL;
 
 
-                boost::container::stable_vector<double>* descriptors = faceInfo->get_descriptors();
+                boost::container::stable_vector<double> *descriptors = faceInfo->get_descriptors();
                 delete descriptors;
                 descriptors = NULL;
 
@@ -892,8 +928,8 @@ int main() {
                 long t_start, t_end;
                 t_start = utils::timestamp();
 
-                std::ostringstream* sout = new std::ostringstream();
-                std::istringstream* sin = new std::istringstream();
+                std::ostringstream *sout = new std::ostringstream();
+                std::istringstream *sin = new std::istringstream();
 
                 sin->str(image);
 
@@ -922,14 +958,14 @@ int main() {
 
             std::string log_id = bsoncxx::oid().to_string();
 
-            dlib::matrix<dlib::rgb_pixel> img ;
+            dlib::matrix<dlib::rgb_pixel> img;
             face::local_load_image(img, raw_image, log_id);
 
             raw_image.clear();
             std::string().swap(raw_image);
 
 
-            boost::container::stable_vector<face::FaceInfo*>* faceInfos = new boost::container::stable_vector<face::FaceInfo*>();
+            boost::container::stable_vector<face::FaceInfo *> *faceInfos = new boost::container::stable_vector<face::FaceInfo *>();
             face::face_detect(faceInfos, img, 1);
 
             dlib::matrix<dlib::rgb_pixel>().swap(img);
@@ -938,25 +974,25 @@ int main() {
 
                 faceset::image::add(log_id, image, user_id);
 
-                face::FaceInfo* faceInfo = (*faceInfos)[0];
+                face::FaceInfo *faceInfo = (*faceInfos)[0];
 
                 std::string face_token = faceInfo->get_face_token();
-                face::Location* location = faceInfo->get_location();
-                boost::container::stable_vector<face::Point*>* landmarks = faceInfo->get_landmarks();
-                boost::container::stable_vector<double>* descriptors = faceInfo->get_descriptors();
+                face::Location *location = faceInfo->get_location();
+                boost::container::stable_vector<face::Point *> *landmarks = faceInfo->get_landmarks();
+                boost::container::stable_vector<double> *descriptors = faceInfo->get_descriptors();
 
 
                 json location_json = {{"left",     location->left},
-                                            {"top",      location->top},
-                                            {"width",    location->width},
-                                            {"height",   location->height},
-                                            {"rotation", location->rotation}};
+                                      {"top",      location->top},
+                                      {"width",    location->width},
+                                      {"height",   location->height},
+                                      {"rotation", location->rotation}};
 
                 std::string location_json_str = location_json.dump();
 
 
-                boost::container::stable_vector<std::string>* landmark_jsons = new boost::container::stable_vector<std::string>();
-                for(face::Point* point : *landmarks){
+                boost::container::stable_vector<std::string> *landmark_jsons = new boost::container::stable_vector<std::string>();
+                for (face::Point *point : *landmarks) {
                     json landmark_json = json::object();
                     landmark_json["x"] = point->x;
                     landmark_json["y"] = point->y;
@@ -972,7 +1008,8 @@ int main() {
                 }
 
                 faceset::user::upsert(group_id, user_id, user_info);
-                faceset::face::add(group_id, user_id, log_id, face_token, location_json_str, landmark_jsons, descriptors);
+                faceset::face::add(group_id, user_id, log_id, face_token, location_json_str, landmark_jsons,
+                                   descriptors);
 
                 delete landmark_jsons;
                 landmark_jsons = NULL;
@@ -982,14 +1019,14 @@ int main() {
             }
 
 
-            for(face::FaceInfo* faceInfo : *faceInfos){
+            for (face::FaceInfo *faceInfo : *faceInfos) {
 
-                face::Location* location  = faceInfo->get_location();
+                face::Location *location = faceInfo->get_location();
                 delete location;
                 location = NULL;
 
-                boost::container::stable_vector<face::Point*>* landmarks = faceInfo->get_landmarks();
-                for(face::Point* point : *landmarks){
+                boost::container::stable_vector<face::Point *> *landmarks = faceInfo->get_landmarks();
+                for (face::Point *point : *landmarks) {
                     delete point;
                     point = NULL;
                 }
@@ -998,7 +1035,7 @@ int main() {
                 landmarks = NULL;
 
 
-                boost::container::stable_vector<double>* descriptors = faceInfo->get_descriptors();
+                boost::container::stable_vector<double> *descriptors = faceInfo->get_descriptors();
                 delete descriptors;
                 descriptors = NULL;
 
@@ -1052,8 +1089,8 @@ int main() {
                 long t_start, t_end;
                 t_start = utils::timestamp();
 
-                std::ostringstream* sout = new std::ostringstream();
-                std::istringstream* sin = new std::istringstream();
+                std::ostringstream *sout = new std::ostringstream();
+                std::istringstream *sin = new std::istringstream();
 
                 sin->str(image);
 
@@ -1086,7 +1123,7 @@ int main() {
             raw_image.clear();
             std::string().swap(raw_image);
 
-            boost::container::stable_vector<face::FaceInfo*>* faceInfos = new boost::container::stable_vector<face::FaceInfo*>();
+            boost::container::stable_vector<face::FaceInfo *> *faceInfos = new boost::container::stable_vector<face::FaceInfo *>();
             face::face_detect(faceInfos, img, 1);
 
             dlib::matrix<dlib::rgb_pixel>().swap(img);
@@ -1095,12 +1132,12 @@ int main() {
 
                 faceset::image::add(log_id, image, user_id);
 
-                face::FaceInfo* faceInfo = (*faceInfos)[0];
+                face::FaceInfo *faceInfo = (*faceInfos)[0];
 
                 std::string face_token = faceInfo->get_face_token();
-                face::Location* location = faceInfo->get_location();
-                boost::container::stable_vector<face::Point*>* landmarks = faceInfo->get_landmarks();
-                boost::container::stable_vector<double>* descriptors = faceInfo->get_descriptors();
+                face::Location *location = faceInfo->get_location();
+                boost::container::stable_vector<face::Point *> *landmarks = faceInfo->get_landmarks();
+                boost::container::stable_vector<double> *descriptors = faceInfo->get_descriptors();
 
 
                 json location_json = {{"left",     location->left},
@@ -1112,8 +1149,8 @@ int main() {
                 std::string location_json_str = location_json.dump();
 
 
-                boost::container::stable_vector<std::string>* landmark_jsons = new boost::container::stable_vector<std::string>();
-                for(face::Point* point : *landmarks){
+                boost::container::stable_vector<std::string> *landmark_jsons = new boost::container::stable_vector<std::string>();
+                for (face::Point *point : *landmarks) {
                     json landmark_json = json::object();
                     landmark_json["x"] = point->x;
                     landmark_json["y"] = point->y;
@@ -1127,7 +1164,8 @@ int main() {
                     if (rows.size() > 0) {
                         faceset::user::delete_one(group_id, user_id);
                         faceset::user::upsert(group_id, user_id, user_info);
-                        faceset::face::add(group_id, user_id, log_id, face_token, location_json_str, landmark_jsons, descriptors);
+                        faceset::face::add(group_id, user_id, log_id, face_token, location_json_str, landmark_jsons,
+                                           descriptors);
                     }
                     rows.clear();
                     boost::container::stable_vector<std::string>().swap(rows);
@@ -1136,7 +1174,8 @@ int main() {
 
                     faceset::user::delete_one(group_id, user_id);
                     faceset::user::upsert(group_id, user_id, user_info);
-                    faceset::face::add(group_id, user_id, log_id, face_token, location_json_str, landmark_jsons, descriptors);
+                    faceset::face::add(group_id, user_id, log_id, face_token, location_json_str, landmark_jsons,
+                                       descriptors);
                 }
 
 
@@ -1149,14 +1188,14 @@ int main() {
             }
 
 
-            for(face::FaceInfo* faceInfo : *faceInfos){
+            for (face::FaceInfo *faceInfo : *faceInfos) {
 
-                face::Location* location  = faceInfo->get_location();
+                face::Location *location = faceInfo->get_location();
                 delete location;
                 location = NULL;
 
-                boost::container::stable_vector<face::Point*>* landmarks = faceInfo->get_landmarks();
-                for(face::Point* point : *landmarks){
+                boost::container::stable_vector<face::Point *> *landmarks = faceInfo->get_landmarks();
+                for (face::Point *point : *landmarks) {
                     delete point;
                     point = NULL;
                 }
@@ -1165,7 +1204,7 @@ int main() {
                 landmarks = NULL;
 
 
-                boost::container::stable_vector<double>* descriptors = faceInfo->get_descriptors();
+                boost::container::stable_vector<double> *descriptors = faceInfo->get_descriptors();
                 delete descriptors;
                 descriptors = NULL;
 
@@ -1408,18 +1447,17 @@ int main() {
         server.stop();
     });
 
+
     // face recognition ready
     face::init();
 
     // faceset manage ready
-    faceset::init();
+    const std::string uri_str = "mongodb://127.0.0.1:27017";
+    faceset::init(uri_str);
 
     // face search index ready
     build_all_face_index();
 
-//    char name[1024];
-//    int rslt = readlink("/proc/self/exe", name, sizeof(name));
-//    name[rslt] = '\0';
 
     std::cout << "server inited, startup with pid: " << getpid() << std::endl;
     std::cout << std::endl;
