@@ -196,6 +196,8 @@ namespace face {
      */
     void build_group_index(std::string& group_id, boost::container::stable_vector<std::string> user_ids, boost::container::stable_vector<std::vector<double>>& feature_list){
 
+        std::cout << "build face index of group_id:" << group_id << std::endl;
+
 //        flann::Matrix<double> dataset(new double[feature_list.size()*128], feature_list.size(), 128);
 //
 //        for (int n = 0; n < feature_list.size(); n++) {
@@ -373,6 +375,9 @@ std::vector<matrix < float, 0, 1>>& local_get_descriptors(std::vector<matrix < f
  */
 std::vector<int>* local_ann_search( std::vector<int>* closest, const double *descriptor, int result_n, const std::string &group_id) {
 
+    long t_start, t_end;
+    t_start = utils::timestamp();
+
     // group_id link to face feature index
     AnnoyIndex<int, double, Euclidean, Kiss32Random>* index = (*group_index_map)[group_id];
 
@@ -383,13 +388,24 @@ std::vector<int>* local_ann_search( std::vector<int>* closest, const double *des
 
     // search face from annoy index tree
     int search_k = -1;
+    std::vector<int> tmp_closest = std::vector<int>();
     std::vector<double> distances = std::vector<double>();
 
-    index->get_nns_by_vector(descriptor, result_n, search_k, closest, &distances);
+    index->get_nns_by_vector(descriptor, result_n, search_k, &tmp_closest, &distances);
 
-    for (int i = 0; i < closest->size(); i++) {
-        int id = (*closest)[i];
+    t_end = utils::timestamp();
+    std::cout << "face search with group_id:" << group_id << " in " << t_end - t_start << " ms" << std::endl;
+
+    for (int i = 0; i < tmp_closest.size(); i++) {
+        int id = tmp_closest[i];
         double distance = distances[i];
+
+        // set the max distance
+        if(distance > 0.2){
+            continue;
+        }
+
+        closest->push_back(id);
 
         std::cout << "search result -- id:" << id << "  distance:" << distance << std::endl;
     }

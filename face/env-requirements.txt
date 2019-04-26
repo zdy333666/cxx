@@ -1,17 +1,23 @@
 OS: Ubuntu 18.04 TLS
 
+安装gcc-7.3.0, g++7.3.0
 
 安装g++编译器，可以通过命令“sudo apt-get install build-essential”实现。 执行完后，就完成了gcc,g++,make的安装。
 注：“sudo apt-get install build-essential --fix-missing”，这个命令是修补安装build-essential，即已安装了部分build-essential，但没有安装完全，此时可以使用该命令继续安装build-essential。
 通过“gcc -v, “g++ -v”可以查看g++是否安装成功。
 
+安装 boost
+sudo apt install libboost-all-dev
 
 安装 cinatra
 git clone https://github.com/qicosmos/cinatra
+cd cinatra
+sudo cp -r include /usr/local/include/cinatra
 
 安装 annoy
 git clone https://github.com/spotify/annoy.git
-
+cd annoy
+sudo cp -r src /usr/local/include/annoy
 
 
 {

@@ -972,7 +972,7 @@ int main() {
 
             if (faceInfos->size() > 0) {
 
-                faceset::image::add(log_id, image, user_id);
+                faceset::image::add(log_id, image, user_id, group_id);
 
                 face::FaceInfo *faceInfo = (*faceInfos)[0];
 
@@ -1130,7 +1130,7 @@ int main() {
 
             if ((*faceInfos).size() > 0) {
 
-                faceset::image::add(log_id, image, user_id);
+                faceset::image::add(log_id, image, user_id, group_id);
 
                 face::FaceInfo *faceInfo = (*faceInfos)[0];
 

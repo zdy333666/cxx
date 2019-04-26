@@ -308,6 +308,127 @@ namespace faceset {
          */
         void copy(std::string &user_id, std::string &src_group_id, std::string &dst_group_id) {
 
+            // copy user
+
+            bsoncxx::document::value user_filter =  bsoncxx::builder::stream::document()
+                    << "group_id" << src_group_id
+                    << "user_id" << user_id
+                    << bsoncxx::builder::stream::finalize;
+
+            bsoncxx::document::value user_projection = bsoncxx::builder::stream::document()
+                    << "_id" << 0
+                    << "user_info" << 1
+                    << bsoncxx::builder::stream::finalize;
+
+            mongocxx::options::find user_options;
+            user_options.projection(user_projection.view());
+
+            mongocxx::collection user_coll = db["faceset_user"];
+            mongocxx::cursor user_cursor = user_coll.find(user_filter.view(), user_options);
+
+            boost::container::stable_vector<bsoncxx::document::value> new_user_docs;
+
+            for ( bsoncxx::document::view doc : user_cursor){
+
+                bsoncxx::document::value new_user_doc =  bsoncxx::builder::stream::document()
+                        << "group_id" << dst_group_id
+                        << "user_id" << user_id
+                        << "user_info" << doc["user_info"].get_value()
+                        << "ctime" <<  bsoncxx::types::b_date(std::chrono::system_clock::now())
+                        << bsoncxx::builder::stream::finalize;
+
+                new_user_docs.push_back(new_user_doc);
+            }
+
+            if(! new_user_docs.empty()){
+                user_coll.insert_many(new_user_docs);
+            }
+
+
+            // copy image
+
+            bsoncxx::document::value image_filter =  bsoncxx::builder::stream::document()
+                    << "group_id" << src_group_id
+                    << "user_id" << user_id
+                    << bsoncxx::builder::stream::finalize;
+
+            bsoncxx::document::value image_projection = bsoncxx::builder::stream::document()
+                    << "_id" << 0
+                    << "image_id" << 1
+                    << "data_base64" << 1
+                    << bsoncxx::builder::stream::finalize;
+
+            mongocxx::options::find image_options;
+            image_options.projection(image_projection.view());
+
+            mongocxx::collection image_coll = db["faceset_image"];
+            mongocxx::cursor image_cursor = image_coll.find(image_filter.view(), image_options);
+
+
+            boost::container::stable_vector<bsoncxx::document::value> new_image_docs;
+
+            for ( bsoncxx::document::view doc : image_cursor){
+
+                bsoncxx::document::value new_image_doc =  bsoncxx::builder::stream::document()
+                        << "group_id" << dst_group_id
+                        << "user_id" << user_id
+                        << "image_id" << doc["image_id"].get_value()
+                        << "data_base64" << doc["data_base64"].get_value()
+                        << "ctime" <<  bsoncxx::types::b_date(std::chrono::system_clock::now())
+                        << bsoncxx::builder::stream::finalize;
+
+                new_image_docs.push_back(new_image_doc);
+            }
+
+            if(! new_image_docs.empty()){
+                image_coll.insert_many(new_image_docs);
+            }
+
+
+            // copy face
+
+            bsoncxx::document::value face_filter =  bsoncxx::builder::stream::document()
+                    << "group_id" << src_group_id
+                    << "user_id" << user_id
+                    << bsoncxx::builder::stream::finalize;
+
+            bsoncxx::document::value face_projection = bsoncxx::builder::stream::document()
+                    << "_id" << 0
+                    << "image_id" << 1
+                    << "face_token" << 1
+                    << "location" << 1
+                    << "landmark" << 1
+                    << "descriptor" << 1
+                    << bsoncxx::builder::stream::finalize;
+
+            mongocxx::options::find face_options;
+            face_options.projection(face_projection.view());
+
+            mongocxx::collection face_coll = db["faceset_face"];
+            mongocxx::cursor face_cursor = face_coll.find(face_filter.view(), face_options);
+
+
+            boost::container::stable_vector<bsoncxx::document::value> new_face_docs;
+
+            for ( bsoncxx::document::view doc : face_cursor){
+
+                bsoncxx::document::value new_face_doc =  bsoncxx::builder::stream::document()
+                        << "group_id" << dst_group_id
+                        << "user_id" << user_id
+                        << "image_id" << doc["image_id"].get_value()
+                        << "face_token" << doc["face_token"].get_value()
+                        << "location" << doc["location"].get_value()
+                        << "landmark" << doc["landmark"].get_value()
+                        << "descriptor" << doc["descriptor"].get_value()
+                        << "ctime" <<  bsoncxx::types::b_date(std::chrono::system_clock::now())
+                        << bsoncxx::builder::stream::finalize;
+
+                new_face_docs.push_back(new_face_doc);
+            }
+
+            if(! new_face_docs.empty()){
+                face_coll.insert_many(new_face_docs);
+            }
         }
 
         /**
@@ -505,12 +626,13 @@ namespace faceset {
 
     namespace image {
 
-        std::string add(std::string& image_id, std::string& data_base64, std::string& user_id){
+        std::string add(std::string& image_id, std::string& data_base64, std::string& user_id, std::string& group_id){
 
             auto builder = bsoncxx::builder::stream::document{};
             bsoncxx::document::value doc = builder
                     << "image_id" << image_id
                     << "data_base64" << data_base64
+                    << "group_id" << group_id
                     << "user_id" << user_id
                     << "ctime" <<  bsoncxx::types::b_date(std::chrono::system_clock::now())
                     << bsoncxx::builder::stream::finalize;
@@ -560,9 +682,10 @@ namespace faceset {
          * @param user_id
          * @return
          */
-        boost::container::stable_vector<std::string> getlist(std::string& user_id) {
+        boost::container::stable_vector<std::string> getlist(std::string& user_id, std::string& group_id) {
 
             bsoncxx::document::value filter = bsoncxx::builder::stream::document()
+                    << "group_id" << group_id
                     << "user_id" << user_id
                     << bsoncxx::builder::stream::finalize;
             std::cout << "filter:" << bsoncxx::to_json(filter) << std::endl;
