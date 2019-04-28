@@ -1,0 +1,13 @@
+
+real_time_face_recognition:
+https://github.com/shanren7/real_time_face_recognition
+
+
+facenet:
+https://github.com/davidsandberg/facenet
+
+keras-facenet:
+https://github.com/nyoki-mtl/keras-facenet
+
+
+https://blog.csdn.net/yunge812/article/details/86211824
