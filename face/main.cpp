@@ -1003,7 +1003,7 @@ int main() {
 
                 if (action_type == "APPEND") {
                     // ...
-                } else if (action_type == "REPLACE ") {
+                } else if (action_type == "REPLACE") {
                     faceset::user::delete_one(group_id, user_id);
                 }
 
@@ -1170,7 +1170,7 @@ int main() {
                     rows.clear();
                     boost::container::stable_vector<std::string>().swap(rows);
 
-                } else if (action_type == "REPLACE ") {
+                } else if (action_type == "REPLACE") {
 
                     faceset::user::delete_one(group_id, user_id);
                     faceset::user::upsert(group_id, user_id, user_info);
@@ -1178,10 +1178,8 @@ int main() {
                                        descriptors);
                 }
 
-
                 delete landmark_jsons;
                 landmark_jsons = NULL;
-
 
                 result["face_token"] = face_token;
                 result["location"] = location_json;
