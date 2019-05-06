@@ -42,7 +42,7 @@ namespace faceset {
                     << "ctime" <<  bsoncxx::types::b_date(std::chrono::system_clock::now())
                     << bsoncxx::builder::stream::finalize;
 
-            std::cout << "document:" << bsoncxx::to_json(doc) << std::endl;
+//            std::cout << "document:" << bsoncxx::to_json(doc) << std::endl;
 
             mongocxx::collection coll = db["faceset_group"];
             bsoncxx::stdx::optional<mongocxx::result::insert_one> result = coll.insert_one(doc.view());
@@ -658,7 +658,7 @@ namespace faceset {
             bsoncxx::document::value filter = bsoncxx::builder::stream::document()
                     << "image_id" << image_id
                     << bsoncxx::builder::stream::finalize;
-            std::cout << "filter:" << bsoncxx::to_json(filter) << std::endl;
+//            std::cout << "filter:" << bsoncxx::to_json(filter) << std::endl;
 
             bsoncxx::document::value projection = bsoncxx::builder::stream::document()
                     << "_id" << 0
@@ -688,7 +688,7 @@ namespace faceset {
                     << "group_id" << group_id
                     << "user_id" << user_id
                     << bsoncxx::builder::stream::finalize;
-            std::cout << "filter:" << bsoncxx::to_json(filter) << std::endl;
+//            std::cout << "filter:" << bsoncxx::to_json(filter) << std::endl;
 
             bsoncxx::document::value projection = bsoncxx::builder::stream::document()
                     << "_id" << 0

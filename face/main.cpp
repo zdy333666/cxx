@@ -59,24 +59,17 @@ void build_group_face_index(std::string &group_id) {
         feature_list.push_back(features);
     }
 
-//    face_infos.clear();
 
     face::build_group_index(group_id, user_ids, feature_list);
 
-//    std::cout << "user_ids clear ..." << std::endl;
     user_ids.clear();
     boost::container::stable_vector<std::string>().swap(user_ids);
-//    std::cout << "user_ids cleared" << std::endl;
 
-//    std::cout << "feature_list clear ..." << std::endl;
     feature_list.clear();
     boost::container::stable_vector<std::vector<double>>().swap(feature_list);
-//    std::cout << "feature_list cleared" << std::endl;
 
-//    std::cout << "face_infos clear ..." << std::endl;
     face_infos.clear();
     boost::container::stable_vector<std::string>().swap(face_infos);
-//    std::cout << "face_infos cleared" << std::endl;
 }
 
 
@@ -88,6 +81,7 @@ int build_all_face_index() {
     int index_count = 0;
 
     try {
+        face::clear_ann_index();
 
         boost::container::stable_vector<std::string> group_infos = faceset::group::getlist(0, INT_MAX);
         for (std::string group_info_str : group_infos) {
@@ -102,10 +96,8 @@ int build_all_face_index() {
 
         std::cout << "build face index of group count:" << index_count << std::endl;
 
-//        std::cout << "group_infos clear ..." << std::endl;
         group_infos.clear();
         boost::container::stable_vector<std::string>().swap(group_infos);
-//        std::cout << "group_infos cleared" << std::endl;
 
     } catch (std::exception &e) {
         std::cout << e.what() << std::endl;
@@ -145,7 +137,7 @@ int main() {
     /**
      * rebuild index
      */
-    server.set_http_handler<POST>("/face/v1/rebuildIndex", [](request &req, response &res) {
+    server.set_http_handler<POST>("/face/v1/rebuild_index", [](request &req, response &res) {
 
         int index_count = build_all_face_index();
 
@@ -161,7 +153,7 @@ int main() {
     /**
      * rebuild group index
      */
-    server.set_http_handler<POST>("/face/v1/rebuildGroupIndex", [](request &req, response &res) {
+    server.set_http_handler<POST>("/face/v1/rebuild_group_index", [](request &req, response &res) {
 
         json result = json::object();
 

@@ -185,7 +185,28 @@ namespace face {
     // group_id link to face feature index
     std::map<std::string, AnnoyIndex<int, double, Euclidean, Kiss32Random>*>* group_index_map = new std::map<std::string, AnnoyIndex<int, double, Euclidean, Kiss32Random>*>();
 
-    //    std::map<std::string, flann::Index<flann::L2<double> > > group_index_map;
+
+    /**
+     * clear_ann_index
+     */
+    void clear_ann_index(){
+
+        for(std::map<std::string, AnnoyIndex<int, double, Euclidean, Kiss32Random>*>::iterator it =group_index_map->begin(); it != group_index_map->end(); it++){
+            AnnoyIndex<int, double, Euclidean, Kiss32Random>* index = it->second;
+            delete index;
+            index = NULL;
+        }
+        group_index_map->clear();
+
+
+        for(std::map<std::string, std::map<int, std::string>* >::iterator it =group_user_map->begin(); it != group_user_map->end(); it++){
+            std::map<int, std::string>* user_map = it->second;
+            delete user_map;
+            user_map = NULL;
+        }
+        group_user_map->clear();
+
+    }
 
     /**
      * build group feature index
@@ -197,18 +218,6 @@ namespace face {
     void build_group_index(std::string& group_id, boost::container::stable_vector<std::string> user_ids, boost::container::stable_vector<std::vector<double>>& feature_list){
 
         std::cout << "build face index of group_id:" << group_id << std::endl;
-
-//        flann::Matrix<double> dataset(new double[feature_list.size()*128], feature_list.size(), 128);
-//
-//        for (int n = 0; n < feature_list.size(); n++) {
-//            std::vector<double> features = feature_list[n];
-//            for (int k = 0; k < features.size(); k++) {
-//                dataset[n][k] = n;
-//            }
-//        }
-//
-//        flann::Index<flann::L2<double> > index(dataset, flann::KDTreeIndexParams(4));
-//        index.buildIndex();
 
         AnnoyIndex<int, double, Euclidean, Kiss32Random>* index = new AnnoyIndex<int, double, Euclidean, Kiss32Random>(128);
 
