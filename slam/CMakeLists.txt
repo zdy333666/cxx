@@ -6,6 +6,8 @@ set(CMAKE_CXX_STANDARD 17)
 # 增加opencv的依赖
 find_package(OpenCV REQUIRED)
 
+#find_package(libb64 REQUIRED)
+
 
 # 增加PCL库的依赖
 #FIND_PACKAGE( PCL REQUIRED COMPONENTS common io visualization filters )
@@ -28,6 +30,13 @@ FIND_PACKAGE(G2O REQUIRED)
 # CSparse
 FIND_PACKAGE(CSparse REQUIRED)
 INCLUDE_DIRECTORIES(${G2O_INCLUDE_DIR} ${CSPARSE_INCLUDE_DIR})
+
+
+
+ADD_EXECUTABLE(main main.cpp)
+
+ADD_EXECUTABLE(test_opencv test/test_opencv.cpp)
+TARGET_LINK_LIBRARIES(test_opencv ${OpenCV_LIBS} b64)
 
 
 ADD_EXECUTABLE(generate_pointcloud test/generatePointCloud.cpp)
@@ -55,7 +64,8 @@ TARGET_LINK_LIBRARIES(slamEnd
         slambase
         ${OpenCV_LIBS}
         ${PCL_LIBRARIES}
-        g2o_core g2o_types_slam3d g2o_solver_csparse g2o_stuff g2o_csparse_extension ${CSPARSE_LIBRARY})
+        ${CSPARSE_LIBRARY}
+        g2o_core g2o_types_slam3d g2o_solver_csparse g2o_stuff g2o_csparse_extension)
 
 
 ADD_EXECUTABLE(slam test/slam.cpp)
@@ -63,4 +73,5 @@ TARGET_LINK_LIBRARIES(slam
         slambase
         ${OpenCV_LIBS}
         ${PCL_LIBRARIES}
-        g2o_core g2o_types_slam3d g2o_solver_csparse g2o_stuff g2o_csparse_extension ${CSPARSE_LIBRARY})
+        ${CSPARSE_LIBRARY}
+        g2o_core g2o_types_slam3d g2o_solver_csparse g2o_stuff g2o_csparse_extension)

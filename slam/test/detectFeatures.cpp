@@ -87,7 +87,7 @@ int main(int argc, char **argv) {
     cv::drawMatches(rgb1, kp1, rgb2, kp2, goodMatches, imgMatches);
 //    cv::imshow( "good matches", imgMatches );
     cv::imwrite("../data/good_matches.png", imgMatches);
-//    cv::waitKey(0);
+    cv::waitKey(0);
 
     // 计算图像间的运动关系
     // 关键函数：cv::solvePnPRansac()
@@ -154,7 +154,7 @@ int main(int argc, char **argv) {
     cv::drawMatches(rgb1, kp1, rgb2, kp2, matchesShow, imgMatches);
     cv::imshow("inlier matches", imgMatches);
     cv::imwrite("../data/inliers.png", imgMatches);
-    cv::waitKey(0);
+//    cv::waitKey(0);
 
     return 0;
 }

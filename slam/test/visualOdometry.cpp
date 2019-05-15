@@ -59,6 +59,10 @@ int main(int argc, char **argv) {
             continue;
         }
 
+
+        cout << "-- result.rvec: " << result.rvec << endl;
+        cout << "-- result.tvec: " << result.tvec << endl;
+
         // 计算运动范围是否太大
         double norm = normofTransform(result.rvec, result.tvec);
         cout << "norm = " << norm << endl;

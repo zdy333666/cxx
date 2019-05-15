@@ -9,12 +9,12 @@ PointCloud::Ptr image2PointCloud(cv::Mat &rgb, cv::Mat &depth, CAMERA_INTRINSIC_
 
     PointCloud::Ptr cloud(new PointCloud);
 
-    for (int m = 0; m < depth.rows; m += 2)
+    for (int m = 0; m < depth.rows; m += 2) {
         for (int n = 0; n < depth.cols; n += 2) {
             // 获取深度图中(m,n)处的值
             ushort d = depth.ptr<ushort>(m)[n];
             // d 可能没有值，若如此，跳过此点
-            if (d == 0){
+            if (d == 0) {
                 continue;
             }
 
@@ -22,7 +22,7 @@ PointCloud::Ptr image2PointCloud(cv::Mat &rgb, cv::Mat &depth, CAMERA_INTRINSIC_
             PointT p;
 
             // 计算这个点的空间坐标
-            p.z =  double(d) / camera.scale;
+            p.z = double(d) / camera.scale;
             p.x = (n - camera.cx) * p.z / camera.fx;
             p.y = (m - camera.cy) * p.z / camera.fy;
 
@@ -35,6 +35,7 @@ PointCloud::Ptr image2PointCloud(cv::Mat &rgb, cv::Mat &depth, CAMERA_INTRINSIC_
             // 把p加入到点云中
             cloud->points.push_back(p);
         }
+    }
 
     // 设置并保存点云
     cloud->height = 1;
@@ -64,8 +65,8 @@ void computeKeyPointsAndDesp(FRAME &frame, string detector, string descriptor) {
 //    _detector = cv::FeatureDetector::create( detector.c_str() );
 //    _descriptor = cv::DescriptorExtractor::create( descriptor.c_str() );
 
-    _detector = cv::ORB::create();
-    _descriptor = cv::ORB::create();
+    _detector = _descriptor = cv::ORB::create();
+//    _descriptor = cv::ORB::create();
 
     if (!_detector || !_descriptor) {
         cerr << "Unknown detector or discriptor type !" << detector << "," << descriptor << endl;
@@ -101,7 +102,7 @@ RESULT_OF_PNP estimateMotion(FRAME &frame1, FRAME &frame2, CAMERA_INTRINSIC_PARA
     }
 
     cout << "min dis = " << minDis << endl;
-    if (minDis < 10){
+    if (minDis < 10) {
         minDis = 10;
     }
 
@@ -136,6 +137,8 @@ RESULT_OF_PNP estimateMotion(FRAME &frame1, FRAME &frame2, CAMERA_INTRINSIC_PARA
         if (d == 0) {
             continue;
         }
+
+        cout << "depth: " << d << endl;
 
         pts_img.push_back(cv::Point2f(frame2.kp[goodMatches[i].trainIdx].pt));
 
@@ -180,6 +183,8 @@ Eigen::Isometry3d cvMat2Eigen(cv::Mat &rvec, cv::Mat &tvec) {
     cv::Rodrigues(rvec, R);
     Eigen::Matrix3d r;
     cv::cv2eigen(R, r);
+
+//    cout << "-- r*r.transpose: " << r*r.transpose() << endl;
 
 //    for (int i = 0; i < 3; i++)
 //        for (int j = 0; j < 3; j++)

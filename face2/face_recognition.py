@@ -6,7 +6,7 @@ import tensorflow as tf
 
 from bson.objectid import ObjectId
 from skimage.transform import resize
-from keras.models import load_model
+from annoy import AnnoyIndex
 
 import detect_face
 import facenet
@@ -59,23 +59,6 @@ class facenetEmbedding:
         self.sess.close()
 
 
-
-# 创建MTCNN网络
-face_detect = Facedetection()  # 初始化 Facedetection()
-
-# 初始化facenetEmbedding
-# model_path = 'data/facenet_keras.h5'
-# facenet = load_model(model_path)
-# # facenet.summary()
-
-model_path = "data/20180402-114759"
-face_net = facenetEmbedding(model_path)
-
-
-# 初始化加载模型时,预加载 graph
-# facenet.predict_on_batch(np.array([np.zeros((160, 160, 3))]))
-
-
 def prewhiten(x):
     if x.ndim == 4:
         axis = (1, 2, 3)
@@ -109,14 +92,78 @@ def calc_embs(imgs, batch_size):
     return embs
 
 
-nowTime = lambda: int(round(time.time() * 1000))
+def nowTime():
+    return int(round(time.time() * 1000))
+
 
 image_size = 160
 
+# 创建MTCNN网络
+face_detect = Facedetection()
 
-def detect(image, max_face_num):
+# 初始化facenetEmbedding
+model_path = "data/20180402-114759"
+face_net = facenetEmbedding(model_path)
 
-    tmp_image_path = "tmp/" + ObjectId().__str__() + ".jpg"
+"""
+group_id link to  index_user_map
+"""
+group_user_map = dict()
+
+"""
+group_id link to face feature index
+"""
+group_index_map = dict()
+
+
+def clear_ann_index():
+    group_index_map.clear()
+    group_user_map.clear()
+
+
+def delete_group_ann_index(group_id):
+    group_index_map.pop(group_id, None)
+    group_user_map.pop(group_id, None)
+
+
+def build_group_index(group_id, user_ids, feature_list):
+    """
+    build group feature index
+    """
+
+    print("build face index of group_id:", group_id)
+
+    f = 512
+    index = AnnoyIndex(f)
+
+    for n in range(len(feature_list)):
+        features = feature_list[n]
+        index.add_item(n, features)
+
+    index.build(4)
+
+    old_index = group_index_map.get(group_id)
+
+    if old_index is not None:
+        print("old_index:", old_index)
+
+    group_index_map[group_id] = index
+
+    index_user_map = dict()
+
+    for m in range(len(user_ids)):
+        index_user_map[m] = user_ids[m]
+
+    old_index_user_map = group_user_map.get(group_id)
+
+    if old_index_user_map is not None:
+        print("old_index_user_map:", old_index_user_map)
+
+    group_user_map[group_id] = index_user_map
+
+
+def local_load_image(image, log_id):
+    tmp_image_path = "tmp/" + log_id + ".jpg"
     # print("tmp_image_name:", tmp_image_path)
 
     start_time = nowTime()
@@ -132,7 +179,11 @@ def detect(image, max_face_num):
     end_time = nowTime()
     print("save/reload image in ", end_time - start_time, " ms")
 
-    gray = cv2.cvtColor(loaded_img, cv2.COLOR_BGR2GRAY)
+    return loaded_img
+
+
+def local_get_faces(image):
+    gray = cv2.cvtColor(image, cv2.COLOR_BGR2GRAY)
     img = to_rgb(gray)
     # img = cv2.cvtColor(loaded_img, cv2.COLOR_BGR2RGB)
 
@@ -143,19 +194,106 @@ def detect(image, max_face_num):
     end_time = nowTime()
     print("face_detect in ", end_time - start_time, " ms")
 
+    return bounding_boxes, points
+
+
+def local_get_descriptors(faces):
+    start_time = nowTime()
+
+    embeddings = face_net.get_embedding(faces)
+
+    end_time = nowTime()
+    print("calc_embs in ", end_time - start_time, " ms")
+
+    print("embeddings.shape:", embeddings.shape)
+
+    return embeddings
+
+
+def local_ann_search(descriptors, result_n, group_id):
+    closest = list()
+
+    # group_id link to face feature index
+    index = group_index_map[group_id]
+    if index is None:
+        return closest
+
+    start_time = nowTime()
+
+    # search face from annoy index tree
+    search_k = -1
+
+    tmp_closest, distances = index.get_nns_by_vector(descriptors, result_n, search_k, include_distances=True)
+
+    print("ann_search--closest:", tmp_closest, "distances:", distances)
+
+    end_time = nowTime()
+    print("face search with group_id:", group_id, " in ", end_time - start_time, " ms")
+
+    for i in range(len(tmp_closest)):
+        _id = tmp_closest[i]
+        distance = distances[i]
+        # print("distance:", distance)
+
+        # set the max distance
+        if distance > 1:
+            continue
+
+        closest.append(_id)
+
+        print("search result -- id:", _id, "  distance:", distance)
+
+    return closest
+
+
+def user_search(descriptors, result_n, group_ids):
+    user_infos = list()
+
+    for group_id in group_ids:
+
+        user_map = group_user_map.get(group_id)
+
+        if user_map is None:
+            continue
+
+        # print("user_map:", user_map)
+
+        closest = local_ann_search(descriptors, result_n, group_id)
+
+        for id in closest:
+            user_info = dict()
+            user_info['group_id'] = group_id
+            user_info['user_id'] = user_map.get(id)
+            user_info['score'] = 0.0
+
+            user_infos.append(user_info)
+
+        result_n = result_n - len(closest)
+
+        if result_n == 0:
+            break
+
+    return user_infos
+
+
+def detect(image, max_face_num):
+
+    face_infos = list()
+
+    img = cv2.cvtColor(image, cv2.COLOR_BGR2RGB)
+
+    bounding_boxes, points = local_get_faces(img)
+
     nrof_faces = bounding_boxes.shape[0]  # number of faces
 
     if nrof_faces > 0:
         print('找到人脸数目为：{}'.format(nrof_faces))
-
-        # print("points ", points)
 
         faces = []
 
         for face_position in bounding_boxes:
             face_position = face_position.astype(int)
             print("face_position:", face_position)
-            # print("face_position min:", np.min(face_position))
 
             left = max(face_position[0], 0)
             right = max(face_position[2], 0)
@@ -166,18 +304,50 @@ def detect(image, max_face_num):
 
             faces.append(crop)
 
-        start_time = nowTime()
+        embeddings = local_get_descriptors(faces)
 
-        # embeddings = calc_embs(faces, len(faces))
-        embeddings = face_net.get_embedding(faces)
+        for i in range(len(embeddings)):
 
-        end_time = nowTime()
-        print("calc_embs in ", end_time - start_time, " ms")
+            if i > max_face_num:
+                break
 
-        print("embeddings.shape:", embeddings.shape)
+            face_position = bounding_boxes[i]
+            face_position = face_position.astype(int)
 
+            left = max(face_position[0], 0)
+            right = max(face_position[2], 0)
+            top = max(face_position[1], 0)
+            bottom = max(face_position[3], 0)
 
-        # for i in range(len(embeddings)):
-        #     print(embeddings[i])
+            # cv2.rectangle(image, (left, top), (right, bottom), (0, 255, 0), 1)
+            # cv2.imwrite("tmp/face.jpg", image)
 
-    return 0
+            location = dict()
+            location['left'] = float(left)
+            location['top'] = float(top)
+            location['width'] = float(right - left)
+            location['height'] = float(bottom - top)
+            location['rotation'] = 0
+
+            landmarks = list()
+
+            embedding = embeddings[i]
+            embedding = embedding.astype(float)
+
+            # print("embedding type:", type(embedding))
+
+            descriptors = list()
+            for n in embedding:
+                descriptors.append(n)
+
+            face_info = dict()
+            face_info['face_token'] = ObjectId().__str__()
+            face_info['face_probability'] = 1.0
+            face_info['label'] = ''
+            face_info['location'] = location
+            face_info['landmark'] = landmarks
+            face_info['descriptors'] = descriptors
+
+            face_infos.append(face_info)
+
+    return face_infos

@@ -47,7 +47,7 @@ int main(int argc, char **argv) {
     computeKeyPointsAndDesp(lastFrame, detector, descriptor);
     PointCloud::Ptr cloud = image2PointCloud(lastFrame.rgb, lastFrame.depth, camera);
 
-//    pcl::visualization::CloudViewer viewer("viewer");
+    pcl::visualization::CloudViewer viewer("viewer");
 
     // 是否显示点云
     bool visualize = pd.getData("visualize_pointcloud") == string("yes");
@@ -114,10 +114,10 @@ int main(int argc, char **argv) {
         cout << "T=" << T.matrix() << endl;
 
         // 去掉可视化的话，会快一些
-//        if (visualize == true) {
-//            cloud = joinPointCloud(cloud, currFrame, T, camera);
-//            viewer.showCloud(cloud);
-//        }
+        if (visualize == true) {
+            cloud = joinPointCloud(cloud, currFrame, T, camera);
+            viewer.showCloud(cloud);
+        }
 
 
 

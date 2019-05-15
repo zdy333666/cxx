@@ -175,6 +175,7 @@ int main() {
         } catch (std::exception &e) {
             std::cout << e.what() << std::endl;
 
+            result.clear();
             result["error_code"] = 1;
             result["error_msg"] = e.what();
         }
@@ -338,6 +339,7 @@ int main() {
         } catch (std::exception &e) {
             std::cout << e.what() << std::endl;
 
+            result.clear();
             result["error_code"] = 1;
             result["log_id"] = bsoncxx::oid().to_string();
             result["error_msg"] = e.what();
@@ -702,6 +704,7 @@ int main() {
         } catch (std::exception &e) {
             std::cout << e.what() << std::endl;
 
+            result.clear();
             result["error_code"] = 1;
             result["log_id"] = bsoncxx::oid().to_string();
             result["error_msg"] = e.what();
@@ -748,6 +751,7 @@ int main() {
         } catch (std::exception &e) {
             std::cout << e.what() << std::endl;
 
+            result.clear();
             result["error_code"] = 1;
             result["log_id"] = bsoncxx::oid().to_string();
             result["error_msg"] = e.what();
@@ -876,6 +880,7 @@ int main() {
         } catch (std::exception &e) {
             std::cout << e.what() << std::endl;
 
+            result.clear();
             result["error_code"] = 1;
             result["log_id"] = bsoncxx::oid().to_string();
             result["error_msg"] = e.what();
@@ -1006,8 +1011,12 @@ int main() {
                 delete landmark_jsons;
                 landmark_jsons = NULL;
 
-                result["face_token"] = face_token;
-                result["location"] = location_json;
+                result["error_code"] = 0;
+                result["error_msg"] = 'SUCCESS';
+                result["result"] = {
+                        {"face_token", face_token},
+                        {"location", location_json}
+                };
             }
 
 
@@ -1040,6 +1049,10 @@ int main() {
 
         } catch (std::exception &e) {
             std::cout << e.what() << std::endl;
+
+            result.clear();
+            result["error_code"] = 1;
+            result["error_msg"] = e.what();
         }
 
         res.add_header("Content-Type", "application/json");
@@ -1173,8 +1186,12 @@ int main() {
                 delete landmark_jsons;
                 landmark_jsons = NULL;
 
-                result["face_token"] = face_token;
-                result["location"] = location_json;
+                result["error_code"] = 0;
+                result["error_msg"] = 'SUCCESS';
+                result["result"] = {
+                        {"face_token", face_token},
+                        {"location", location_json}
+                };
             }
 
 
@@ -1207,6 +1224,10 @@ int main() {
 
         } catch (std::exception &e) {
             std::cout << e.what() << std::endl;
+
+            result.clear();
+            result["error_code"] = 1;
+            result["error_msg"] = e.what();
         }
 
         res.add_header("Content-Type", "application/json");
@@ -1290,6 +1311,7 @@ int main() {
         } catch (std::exception &e) {
             std::cout << e.what() << std::endl;
 
+            result.clear();
             result["error_code"] = 1;
             result["log_id"] = bsoncxx::oid().to_string();
             result["error_msg"] = e.what();
@@ -1415,6 +1437,7 @@ int main() {
         } catch (std::exception &e) {
             std::cout << e.what() << std::endl;
 
+            result.clear();
             result["error_code"] = 1;
             result["log_id"] = bsoncxx::oid().to_string();
             result["error_msg"] = e.what();

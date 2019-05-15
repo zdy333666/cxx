@@ -1,5 +1,6 @@
 import datetime
 import pymongo
+from bson.objectid import ObjectId
 
 client = pymongo.MongoClient("mongodb://localhost:27017/")
 db = client["face2"]
@@ -11,10 +12,38 @@ db = client["face2"]
 #     db = client["face"];
 # }
 
+class Auth:
+    def get_token(self):
+        token = ObjectId().__str__()
+
+        doc = dict()
+        doc["token"] = token
+        doc["ctime"] = datetime.datetime.utcnow()
+
+        _coll = db["faceset_token"]
+        _result = _coll.insert_one(doc)
+
+        inserted_id = _result.inserted_id
+        print("faceset token inserted id:", inserted_id)
+
+        return token
+
+    def check_token(self, token):
+        _filter = dict()
+        _filter["token"] = token
+
+        _coll = db["faceset_token"]
+
+        return _coll.count(filter=_filter) > 0
+
 
 class Group:
 
     def add(self, group_id, group_name):
+        doc = dict()
+        doc["group_id"] = group_id
+        doc["group_name"] = group_name
+        doc["ctime"] = datetime.datetime.utcnow()
 
         doc = dict()
         doc["group_id"] = group_id
@@ -60,7 +89,7 @@ class Group:
         _filter = dict()
         _filter["group_id"] = group_id
 
-        print("filter:", _filter)
+        # print("filter:", _filter)
 
         projection = dict()
         projection["_id"] = 0
@@ -177,14 +206,14 @@ class User:
 
         _filter["user_id"] = user_id
 
-        print("filter:", _filter)
+        # print("filter:", _filter)
 
         projection = dict()
         projection["_id"] = 0
         projection["group_id"] = 1
         projection["user_info"] = 1
 
-        print("projection:", projection)
+        # print("projection:", projection)
 
         _coll = db["faceset_user"];
         _cursor = _coll.find(filter=_filter, projection=projection)
@@ -298,11 +327,15 @@ class User:
 
         _coll = db["faceset_face"]
         result = _coll.delete_many(filter=_filter)
-        print("faceset_face deleted count:", result.deleted_count)
+        print("faceset face deleted count:", result.deleted_count)
+
+        _coll = db["faceset_image"]
+        result = _coll.delete_many(filter=_filter)
+        print("faceset image deleted count:", result.deleted_count)
 
         _coll = db["faceset_user"]
         result = _coll.delete_one(filter=_filter)
-        print("faceset_user deleted count:", result.deleted_count)
+        print("faceset user deleted count:", result.deleted_count)
 
 
 #
@@ -345,11 +378,14 @@ class Face:
         result = list()
 
         for doc in _cursor:
+            ctime = doc["ctime"]
+            doc["ctime"] = datetime.datetime.fromtimestamp(ctime.timestamp() + 3600 * 8)
+
             result.append(doc)
 
         return result
 
-    def getlist(self, group_id):
+    def getlist_by_group(self, group_id):
 
         _filter = dict()
         _filter["group_id"] = group_id
@@ -377,6 +413,8 @@ class Face:
         _filter["group_id"] = group_id
         _filter["user_id"] = user_id
         _filter["face_token"] = face_token
+
+        print("_filter:", _filter)
 
         coll = db["faceset_face"]
         result = coll.delete_one(_filter)
@@ -415,6 +453,9 @@ class Image:
 
         coll = db["faceset_image"]
         doc = coll.find_one(filter=_filter, projection=projection)
+        if doc is not None:
+            ctime = doc["ctime"]
+            doc["ctime"] = datetime.datetime.fromtimestamp(ctime.timestamp() + 3600 * 8)
 
         return doc
 
@@ -434,6 +475,9 @@ class Image:
         result = list()
 
         for doc in cursor:
+            ctime = doc["ctime"]
+            doc["ctime"] = datetime.datetime.fromtimestamp(ctime.timestamp() + 3600 * 8)
+
             result.append(doc)
 
         return result

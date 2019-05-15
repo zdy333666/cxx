@@ -176,6 +176,8 @@ int main(int argc, char **argv) {
     double gridsize = atof(pd.getData("voxel_grid").c_str()); //分辨图可以在parameters.txt里调
     voxel.setLeafSize(gridsize, gridsize, gridsize);
 
+    cout << "keyframes size: " << keyframes.size() << endl;
+
     for (size_t i = 0; i < keyframes.size(); i++) {
 
         // 从g2o里取出一帧
@@ -193,11 +195,14 @@ int main(int argc, char **argv) {
         pcl::transformPointCloud(*newCloud, *tmp, pose.matrix());
         *output += *tmp;
         tmp->clear();
-        newCloud->clear();
     }
+
+    cout << "output point size: " << output.get()->size() << endl;
 
     voxel.setInputCloud(output);
     voxel.filter(*tmp);
+
+    cout << "Final map point size: " << tmp.get()->size() << endl;
 
     //存储
     pcl::io::savePCDFile("../data/result.pcd", *tmp);
@@ -247,6 +252,8 @@ CHECK_RESULT checkKeyframes(FRAME &f1, FRAME &f2, g2o::SparseOptimizer &opti, bo
     RESULT_OF_PNP result = estimateMotion(f1, f2, camera);
     if (result.inliers < min_inliers) //inliers不够，放弃该帧
         return NOT_MATCHED;
+
+    cout << "-- result.rvec: " << result.rvec << endl;
 
     // 计算运动范围是否太大
     double norm = normofTransform(result.rvec, result.tvec);

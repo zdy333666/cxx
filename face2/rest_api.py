@@ -6,9 +6,11 @@ from bson.objectid import ObjectId
 import sys
 import time
 import base64
-import simplejson
+import json
+import datetime
+import threading
 
-import face_recognition2
+import face_recognition
 import faceset_manage
 
 app = Flask(__name__)
@@ -18,10 +20,74 @@ def nowTime():
     return int(round(time.time() * 1000))
 
 
+class ComplexEncoder(json.JSONEncoder):
+    def default(self, obj):
+        if isinstance(obj, datetime.datetime):
+            return obj.strftime('%Y-%m-%d %H:%M:%S')
+        elif isinstance(obj, datetime.date):
+            return obj.strftime('%Y-%m-%d')
+        else:
+            return json.JSONEncoder.default(self, obj)
+
+
+faceset_auth = faceset_manage.Auth()
 faceset_group = faceset_manage.Group()
 faceset_user = faceset_manage.User()
 faceset_face = faceset_manage.Face()
 faceset_image = faceset_manage.Image()
+
+"""
+build_group_face_index
+"""
+
+
+def build_group_face_index(rlock, group_id):
+    rlock.acquire()
+
+    face_recognition.delete_group_ann_index(group_id)
+
+    face_infos = faceset_face.getlist_by_group(group_id)
+    if len(face_infos) > 0:
+
+        user_ids = list()
+        feature_list = list()
+
+        for face_info in face_infos:
+            user_id = face_info["user_id"]
+            features = face_info["descriptor"]
+
+            user_ids.append(user_id)
+            feature_list.append(features)
+
+        face_recognition.build_group_index(group_id, user_ids, feature_list)
+
+    rlock.release()
+
+
+"""
+build_all_face_index
+"""
+
+
+def build_all_face_index(rlock):
+    rlock.acquire()
+
+    # clear the previous ann index
+    face_recognition.clear_ann_index()
+
+    group_infos = faceset_group.getlist(0, sys.maxsize)
+
+    for group_info in group_infos:
+        group_id = group_info["group_id"]
+        build_group_face_index(rlock, group_id)
+
+    rlock.release()
+
+    index_count = len(group_infos)
+
+    print("build face index of group count:", index_count)
+
+    return index_count
 
 
 @app.route('/')
@@ -36,8 +102,6 @@ def test():
         param = request.json
         print("param:", param)
 
-        name = param["name"]
-
         result = {
             'error_code': 0,
             'error_msg': 'SUCCESS',
@@ -46,9 +110,77 @@ def test():
     except Exception:
         print("Unexpected error:", sys.exc_info())
 
+        result.clear()
         result["error_code"] = 1
+        result["error_msg"] = (sys.exc_info()[1]).__str__()
 
-    resp = Response(simplejson.dumps(result))
+    resp = Response(json.dumps(result))
+    resp.headers['Content-Type'] = 'application/json; charset=utf-8'
+
+    return resp
+
+
+"""
+rebuild index
+"""
+
+
+@app.route('/face/v1/rebuild_index', methods=['POST'])
+def rebuild_index():
+    result = dict()
+    try:
+        # param = request.json
+        # print("param:", param)
+
+        index_count = build_all_face_index()
+
+        result["error_code"] = 0
+        result["error_msg"] = "SUCCESS"
+        result["log_id"] = ObjectId().__str__()
+        result["index_count"] = index_count
+    except Exception:
+        print("Unexpected error:", sys.exc_info())
+
+        result.clear()
+        result["error_code"] = 1
+        result["error_msg"] = (sys.exc_info()[1]).__str__()
+        result["log_id"] = ObjectId().__str__()
+
+    resp = Response(json.dumps(result))
+    resp.headers['Content-Type'] = 'application/json; charset=utf-8'
+
+    return resp
+
+
+"""
+rebuild group index
+"""
+
+
+@app.route('/face/v1/rebuild_group_index', methods=['POST'])
+def rebuild_group_index():
+    result = dict()
+    try:
+        param = request.json
+        # print("param:", param)
+
+        group_id = param["group_id"]
+
+        build_group_face_index(rlock, group_id)
+
+        result["error_code"] = 0
+        result["error_msg"] = "SUCCESS"
+        result["log_id"] = ObjectId().__str__()
+
+    except Exception:
+        print("Unexpected error:", sys.exc_info())
+
+        result.clear()
+        result["error_code"] = 1
+        result["error_msg"] = (sys.exc_info()[1]).__str__()
+        result["log_id"] = ObjectId().__str__()
+
+    resp = Response(json.dumps(result))
     resp.headers['Content-Type'] = 'application/json; charset=utf-8'
 
     return resp
@@ -84,8 +216,8 @@ def face_detect():
 
         log_id = ObjectId().__str__()
 
-        loaded_img = face_recognition2.local_load_image(raw_image, log_id)
-        face_infos = face_recognition2.detect(loaded_img, max_face_num)
+        loaded_img = face_recognition.local_load_image(raw_image, log_id)
+        face_infos = face_recognition.detect(loaded_img, max_face_num)
 
         # print("face_infos", face_infos)
 
@@ -116,10 +248,10 @@ def face_detect():
 
         result.clear()
         result["error_code"] = 1
-        result["log_id"] = ObjectId().__str__()
         result["error_msg"] = (sys.exc_info()[1]).__str__()
+        result["log_id"] = ObjectId().__str__()
 
-    resp = Response(simplejson.dumps(result))
+    resp = Response(json.dumps(result))
     resp.headers['Content-Type'] = 'application/json; charset=utf-8'
 
     return resp
@@ -155,8 +287,8 @@ def face_search():
 
         log_id = ObjectId().__str__()
 
-        loaded_img = face_recognition2.local_load_image(raw_image, log_id)
-        face_infos = face_recognition2.detect(loaded_img, 1)
+        loaded_img = face_recognition.local_load_image(raw_image, log_id)
+        face_infos = face_recognition.detect(loaded_img, 1)
 
         # print("face_infos", face_infos)
 
@@ -168,18 +300,21 @@ def face_search():
 
             group_ids = group_id_list.split(',')
 
-            user_infos = face_recognition2.user_search(descriptors, max_user_num, group_ids)
+            print("group_ids:", group_ids)
+
+            user_infos = face_recognition.user_search(descriptors, max_user_num, group_ids)
 
             user_list = list()
 
             for user_info in user_infos:
 
-                user_doc_list = []
+                user_doc_list = faceset_user.get(user_info["group_id"], user_info["user_id"])
 
                 if len(user_doc_list) > 0:
-                    user_json = simplejson.encoder(user_doc_list[0])
-                    user_info_json = user_json["user_info"]
+                    user_doc = user_doc_list[0]
+                    user_info_json = user_doc["user_info"]
 
+                    user_json = dict()
                     user_json["group_id"] = user_info['group_id']
                     user_json["user_id"] = user_info['user_id']
                     user_json["user_info"] = user_info_json
@@ -187,12 +322,20 @@ def face_search():
 
                     user_list.append(user_json)
 
+            result["error_code"] = 0
+            result["error_msg"] = "SUCCESS"
+            result["log_id"] = ObjectId().__str__()
             result["face_token"] = face_token
             result["user_list"] = user_list
     except Exception:
         print("Unexpected error:", sys.exc_info())
 
-    resp = Response(simplejson.dumps(result))
+        result.clear()
+        result["error_code"] = 1
+        result["error_msg"] = (sys.exc_info()[1]).__str__()
+        result["log_id"] = ObjectId().__str__()
+
+    resp = Response(json.dumps(result))
     resp.headers['Content-Type'] = 'application/json; charset=utf-8'
 
     return resp
@@ -218,16 +361,15 @@ def faceset_group_add():
         result["error_code"] = 0
         result["error_msg"] = "SUCCESS"
         result["log_id"] = ObjectId().__str__()
-
     except Exception:
         print("Unexpected error:", sys.exc_info())
 
         result.clear()
         result["error_code"] = 1
-        result["log_id"] = ObjectId().__str__()
         result["error_msg"] = (sys.exc_info()[1]).__str__()
+        result["log_id"] = ObjectId().__str__()
 
-    resp = Response(simplejson.dumps(result))
+    resp = Response(json.dumps(result))
     resp.headers['Content-Type'] = 'application/json; charset=utf-8'
 
     return resp
@@ -250,12 +392,19 @@ def faceset_group_getlist():
 
         groups = faceset_group.getlist(start, length)
 
+        result["error_code"] = 0
+        result["error_msg"] = 'SUCCESS'
+        result["log_id"] = ObjectId().__str__()
         result["group_id_list"] = groups
-
     except Exception:
         print("Unexpected error:", sys.exc_info())
 
-    resp = Response(simplejson.dumps(result))
+        result.clear()
+        result["error_code"] = 1
+        result["error_msg"] = (sys.exc_info()[1]).__str__()
+        result["log_id"] = ObjectId().__str__()
+
+    resp = Response(json.dumps(result))
     resp.headers['Content-Type'] = 'application/json; charset=utf-8'
 
     return resp
@@ -279,12 +428,19 @@ def faceset_group_getusers():
 
         users = faceset_group.getusers(group_id, start, length)
 
+        result["error_code"] = 0
+        result["error_msg"] = 'SUCCESS'
+        result["log_id"] = ObjectId().__str__()
         result["user_id_list"] = users
-
     except Exception:
         print("Unexpected error:", sys.exc_info())
 
-    resp = Response(simplejson.dumps(result))
+        result.clear()
+        result["error_code"] = 1
+        result["error_msg"] = (sys.exc_info()[1]).__str__()
+        result["log_id"] = ObjectId().__str__()
+
+    resp = Response(json.dumps(result))
     resp.headers['Content-Type'] = 'application/json; charset=utf-8'
 
     return resp
@@ -307,17 +463,21 @@ def faceset_group_delete():
         faceset_group.delete_one(group_id)
 
         result["error_code"] = 0
+        result["error_msg"] = 'SUCCESS'
         result["log_id"] = ObjectId().__str__()
+
+        # delete group ann index
+        face_recognition.delete_group_ann_index(group_id)
 
     except Exception:
         print("Unexpected error:", sys.exc_info())
 
         result.clear()
         result["error_code"] = 1
-        result["log_id"] = ObjectId().__str__()
         result["error_msg"] = (sys.exc_info()[1]).__str__()
+        result["log_id"] = ObjectId().__str__()
 
-    resp = Response(simplejson.dumps(result))
+    resp = Response(json.dumps(result))
     resp.headers['Content-Type'] = 'application/json; charset=utf-8'
 
     return resp
@@ -355,8 +515,8 @@ def faceset_user_add():
 
         log_id = ObjectId().__str__()
 
-        loaded_img = face_recognition2.local_load_image(raw_image, log_id)
-        face_infos = face_recognition2.detect(loaded_img, 1)
+        loaded_img = face_recognition.local_load_image(raw_image, log_id)
+        face_infos = face_recognition.detect(loaded_img, 1)
 
         if len(face_infos) > 0:
 
@@ -374,18 +534,31 @@ def faceset_user_add():
             elif action_type == "REPLACE":
                 faceset_user.delete_one(group_id, user_id)
 
-            user_info_json = simplejson.loads(user_info)
+            user_info_json = json.loads(user_info)
 
             faceset_user.upsert(group_id, user_id, user_info_json)
             faceset_face.add(group_id, user_id, log_id, face_token, location, landmark, descriptors)
 
-            result["face_token"] = face_token
-            result["location"] = location
+            result["error_code"] = 0
+            result["error_msg"] = 'SUCCESS'
+            result["log_id"] = ObjectId().__str__()
+            result["result"] = {
+                "face_token": face_token,
+                "location": location
+            }
+
+            # rebuild group index
+            build_group_face_index(rlock, group_id)
 
     except Exception:
         print("Unexpected error:", sys.exc_info())
 
-    resp = Response(simplejson.dumps(result))
+        result.clear()
+        result["error_code"] = 1
+        result["error_msg"] = (sys.exc_info()[1]).__str__()
+        result["log_id"] = ObjectId().__str__()
+
+    resp = Response(json.dumps(result))
     resp.headers['Content-Type'] = 'application/json; charset=utf-8'
 
     return resp
@@ -423,8 +596,8 @@ def faceset_user_update():
 
         log_id = ObjectId().__str__()
 
-        loaded_img = face_recognition2.local_load_image(raw_image, log_id)
-        face_infos = face_recognition2.detect(loaded_img, 1)
+        loaded_img = face_recognition.local_load_image(raw_image, log_id)
+        face_infos = face_recognition.detect(loaded_img, 1)
 
         if len(face_infos) > 0:
 
@@ -449,13 +622,26 @@ def faceset_user_update():
                 faceset_user.upsert(group_id, user_id, user_info)
                 faceset_face.add(group_id, user_id, log_id, face_token, location, landmark, descriptors)
 
-            result["face_token"] = face_token
-            result["location"] = location
+            result["error_code"] = 0
+            result["error_msg"] = 'SUCCESS'
+            result["log_id"] = ObjectId().__str__()
+            result["result"] = {
+                "face_token": face_token,
+                "location": location
+            }
+
+            # rebuild group index
+            build_group_face_index(rlock, group_id)
 
     except Exception:
         print("Unexpected error:", sys.exc_info())
 
-    resp = Response(simplejson.dumps(result))
+        result.clear()
+        result["error_code"] = 1
+        result["error_msg"] = (sys.exc_info()[1]).__str__()
+        result["log_id"] = ObjectId().__str__()
+
+    resp = Response(json.dumps(result))
     resp.headers['Content-Type'] = 'application/json; charset=utf-8'
 
     return resp
@@ -478,12 +664,19 @@ def faceset_user_get():
 
         rows = faceset_user.get(group_id, user_id)
 
+        result["error_code"] = 0
+        result["error_msg"] = 'SUCCESS'
+        result["log_id"] = ObjectId().__str__()
         result["user_list"] = rows
-
     except Exception:
         print("Unexpected error:", sys.exc_info())
 
-    resp = Response(simplejson.dumps(result))
+        result.clear()
+        result["error_code"] = 1
+        result["log_id"] = ObjectId().__str__()
+        result["error_msg"] = (sys.exc_info()[1]).__str__()
+
+    resp = Response(json.dumps(result))
     resp.headers['Content-Type'] = 'application/json; charset=utf-8'
 
     return resp
@@ -508,16 +701,21 @@ def faceset_user_copy():
         faceset_user.copy(user_id, src_group_id, dst_group_id)
 
         result["error_code"] = 0
+        result["error_msg"] = 'SUCCESS'
         result["log_id"] = ObjectId().__str__()
+
+        # rebuild group index
+        build_group_face_index(rlock, dst_group_id)
 
     except Exception:
         print("Unexpected error:", sys.exc_info())
 
+        result.clear()
         result["error_code"] = 1
         result["log_id"] = ObjectId().__str__()
         result["error_msg"] = (sys.exc_info()[1]).__str__()
 
-    resp = Response(simplejson.dumps(result))
+    resp = Response(json.dumps(result))
     resp.headers['Content-Type'] = 'application/json; charset=utf-8'
 
     return resp
@@ -541,16 +739,21 @@ def faceset_user_delete():
         faceset_user.delete_one(group_id, user_id)
 
         result["error_code"] = 0
+        result["error_msg"] = 'SUCCESS'
         result["log_id"] = ObjectId().__str__()
+
+        # rebuild group index
+        build_group_face_index(rlock, group_id)
 
     except Exception:
         print("Unexpected error:", sys.exc_info())
 
+        result.clear()
         result["error_code"] = 1
         result["log_id"] = ObjectId().__str__()
         result["error_msg"] = (sys.exc_info()[1]).__str__()
 
-    resp = Response(simplejson.dumps(result))
+    resp = Response(json.dumps(result))
     resp.headers['Content-Type'] = 'application/json; charset=utf-8'
 
     return resp
@@ -573,12 +776,19 @@ def faceset_face_getlist():
 
         rows = faceset_face.getlist(group_id, user_id)
 
+        result["error_code"] = 0
+        result["error_msg"] = 'SUCCESS'
+        result["log_id"] = ObjectId().__str__()
         result["face_list"] = rows
-
     except Exception:
         print("Unexpected error:", sys.exc_info())
 
-    resp = Response(simplejson.dumps(result))
+        result.clear()
+        result["error_code"] = 1
+        result["log_id"] = ObjectId().__str__()
+        result["error_msg"] = (sys.exc_info()[1]).__str__()
+
+    resp = Response(json.dumps(result, cls=ComplexEncoder))
     resp.headers['Content-Type'] = 'application/json; charset=utf-8'
 
     return resp
@@ -603,21 +813,96 @@ def faceset_face_delete():
         faceset_face.delete_one(group_id, user_id, face_token)
 
         result["error_code"] = 0
+        result["error_msg"] = 'SUCCESS'
         result["log_id"] = ObjectId().__str__()
+
+        # rebuild group index
+        build_group_face_index(rlock, group_id)
 
     except Exception:
         print("Unexpected error:", sys.exc_info())
 
+        result.clear()
         result["error_code"] = 1
         result["log_id"] = ObjectId().__str__()
         result["error_msg"] = (sys.exc_info()[1]).__str__()
 
-    resp = Response(simplejson.dumps(result))
+    resp = Response(json.dumps(result))
     resp.headers['Content-Type'] = 'application/json; charset=utf-8'
 
     return resp
 
 
+"""
+get access_token
+"""
+
+
+@app.route('/oauth/2.0/token', methods=['POST'])
+def get_token():
+    result = dict()
+    try:
+        token = faceset_auth.get_token()
+
+        result["error_code"] = 0
+        result["error_msg"] = 'SUCCESS'
+        result["access_token"] = token
+        result["expires_in"] = 3600 * 24 * 30
+    except Exception:
+        print("Unexpected error:", sys.exc_info())
+
+        result.clear()
+        result["error_code"] = 1
+        result["error_msg"] = (sys.exc_info()[1]).__str__()
+
+    resp = Response(json.dumps(result))
+    resp.headers['Content-Type'] = 'application/json; charset=utf-8'
+
+    return resp
+
+
+"""
+before_request
+"""
+
+
+@app.before_request
+def before_request():
+    print("before request ...")
+
+    # if request.path == '/oauth/2.0/token':
+    #     return
+    #
+    # access_token = request.args.get('access_token', None)
+    # if (access_token is None) or (not faceset_auth.check_token(access_token)):
+    #     result = dict()
+    #     result["error_code"] = 1
+    #     result["error_msg"] = "invalid access_token"
+    #
+    #     resp = Response(json.dumps(result))
+    #     resp.headers['Content-Type'] = 'application/json; charset=utf-8'
+    #
+    #     return resp
+
+
+"""
+after_request
+"""
+
+
+@app.after_request
+def after_request(response):
+    print("after request ...")
+    print()
+
+    return response
+
+
 if __name__ == '__main__':
+    rlock = threading.RLock()
+
+    # face search index ready
+    build_all_face_index(rlock)
+
     app.config["SERVER_NAME"] = "192.168.8.120:8080"
     app.run()

@@ -2,3 +2,9 @@ face/cmake-build-debug/
 face/cmake-build-release/
 face/data/*
 face/.idea/
+
+face2/.idea
+face2/venv
+face2/__pycache__
+face2/data
+face2/tmp
