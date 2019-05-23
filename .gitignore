@@ -3,8 +3,18 @@ face/cmake-build-release/
 face/data/*
 face/.idea/
 
-face2/.idea
-face2/venv
+face2/.idea/
+face2/venv/
 face2/__pycache__
-face2/data
-face2/tmp
+face2/data/
+face2/tmp/
+
+slam/.idea/
+slam/cmake-build-debug/
+slam/temp/
+
+robot/.idea/
+robot/build/
+robot/install/
+robot/log/
+robot/venv/
