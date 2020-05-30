@@ -10,7 +10,7 @@ OS: Ubuntu 18.04 TLS
 sudo apt install libboost-all-dev
 
 安装 cinatra
-git clone https://github.com/qicosmos/cinatra
+git clone https://github.com/qicosmos/cinatra.git
 cd cinatra
 sudo cp -r include /usr/local/include/cinatra
 
